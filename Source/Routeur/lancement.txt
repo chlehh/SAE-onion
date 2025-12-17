@@ -1,0 +1,6 @@
+python routeur.py -m 192.168.1.10:6000 -p 6001 -d 192.168.1.20
+-m : L'IP et le port du serveur Master.
+
+-p : Le port du routeur sur lequel il écoute.
+
+-d : L'IP de la base de données MariaDB où les informations des routeurs sont stockées.

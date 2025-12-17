@@ -1,23 +1,15 @@
-import socket
-import threading
+import sys
+from PyQt6.QtWidgets import QApplication
+from interface_client import InterfaceClient
 
-# Fonction pour envoyer un message au serveur
-def send_message(client_socket):
-    message = "Message du client"
-    client_socket.send(message.encode())  # Envoi du message
-    response = client_socket.recv(1024)  # Attente de la réponse
-    print(f"Réponse du serveur : {response.decode('utf-8')}")
-    client_socket.close()
+def run_client_gui():
+    app = QApplication(sys.argv)
 
-# Fonction principale du client
-def start_client():
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect(("localhost", 5555))  # Connexion au serveur maître
-    
-    # Envoyer un message de manière asynchrone
-    send_message(client)
+    # Crée l'interface graphique pour se connecter au serveur Master
+    gui = InterfaceClient()
+    gui.show()
 
-# Démarrer le client dans un thread
+    sys.exit(app.exec())
+
 if __name__ == "__main__":
-    client_thread = threading.Thread(target=start_client)
-    client_thread.start()
+    run_client_gui()
