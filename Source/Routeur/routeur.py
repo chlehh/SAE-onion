@@ -2,7 +2,7 @@ import socket
 import mariadb
 import sys
 
-def routeur(master_ip, master_port, routeur_port, db_ip):
+def routeur(master_ip, master_port, routeur_port):
     """Démarre un routeur et reçoit les messages chiffrés"""
     print(f"Routeur démarré sur le port {routeur_port}")
     
@@ -29,7 +29,7 @@ def routeur(master_ip, master_port, routeur_port, db_ip):
 
         # Si le prochain hop est un autre routeur, on transmet le message
         if next_hop in chemin:
-            ip, port = get_routeur_ip_and_port(next_hop, db_ip)
+            ip, port = get_routeur_ip_and_port(next_hop, master_ip, master_port)
             envoyer(ip, port, message_rest)
 
         # Si c'est un client, on envoie le message final
@@ -51,31 +51,26 @@ def demander_chemin_au_master(master_ip, master_port):
 
     return chemin
 
-def get_routeur_ip_and_port(routeur, db_ip):
-    """Récupère l'IP et le port du routeur depuis la base de données"""
+def get_routeur_ip_and_port(routeur, master_ip, master_port):
+    """Récupère l'IP et le port du routeur depuis le serveur Master"""
     try:
-        conn = mariadb.connect(
-            host=db_ip,
-            user="toto",
-            password="toto",
-            database="table_routage"
-        )
-        cur = conn.cursor()
+        conn = socket.socket()
+        conn.connect((master_ip, master_port))
+        message = f"Routeur GET_INFO {routeur}"
+        conn.send(message.encode())
 
-        # Rechercher les informations du routeur
-        cur.execute("SELECT adresse_ip, port FROM routeurs WHERE nom = %s", (routeur,))
-        row = cur.fetchone()
-
+        data = conn.recv(1024).decode().split(",")
         conn.close()
 
-        if row:
-            return row
+        if len(data) == 2:
+            ip, port = data
+            return ip, int(port)
         else:
-            print(f"Erreur : Routeur {routeur} non trouvé dans la base de données.")
+            print(f"Erreur : Routeur {routeur} non trouvé ou mal configuré dans le Master.")
             sys.exit(1)
 
-    except mariadb.Error as e:
-        print(f"Erreur lors de la récupération des données de la DB : {e}")
+    except Exception as e:
+        print(f"Erreur lors de la récupération des informations du routeur : {e}")
         sys.exit(1)
 
 def envoyer(ip, port, message):
@@ -87,12 +82,11 @@ def envoyer(ip, port, message):
 
 if __name__ == "__main__":
     if len(sys.argv) < 5:
-        print("Usage : python routeur.py -m <MASTER_IP>:<MASTER_PORT> -p <ROUTEUR_PORT> -d <DB_IP>")
+        print("Usage : python routeur.py -m <MASTER_IP>:<MASTER_PORT> -p <ROUTEUR_PORT>")
         sys.exit(1)
 
     master_ip, master_port = sys.argv[2].split(":")
     master_port = int(master_port)
     routeur_port = int(sys.argv[4])
-    db_ip = sys.argv[6]
 
-    routeur(master_ip, master_port, routeur_port, db_ip)
+    routeur(master_ip, master_port, routeur_port)

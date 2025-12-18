@@ -66,19 +66,24 @@ def enregistrer_log(message_id, routeur, db_ip):
 
 def get_ip_locale():
     """Retourne l'IP locale de la machine"""
-    return socket.gethostbyname(socket.gethostname())
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))  # Connecte à un serveur externe pour déterminer l'IP locale
+    ip = s.getsockname()[0]
+    s.close()
+    return ip
 
 def master(db_ip, master_port):
     """Serveur Master qui gère la demande de chemin"""
     host = "0.0.0.0"  # Écoute sur toutes les interfaces
     port = master_port
 
+    # Récupérer automatiquement l'IP locale de la machine
+    ip_master = get_ip_locale()  # Récupère l'IP locale automatiquement
+    print(f"MASTER en écoute sur {ip_master}:{port}...")
+
     server = socket.socket()
     server.bind((host, port))
     server.listen(5)
-
-    ip_master = get_ip_locale()  # IP dynamique du Master
-    print(f"MASTER en écoute sur {ip_master}:{port}...")
 
     while True:
         conn, addr = server.accept()
@@ -108,19 +113,17 @@ def master(db_ip, master_port):
         conn.close()
 
 def get_db_ip():
-    """Récupère l'IP du serveur MariaDB depuis la ligne de commande"""
-    if len(sys.argv) < 3:
-        print("Erreur : Vous devez spécifier l'IP de la base de données et le port du Master.")
-        sys.exit(1)
-    return sys.argv[1]
+    """Retourne l'IP de la base de données fournie par l'interface"""
+    return input("Entrez l'IP de la base de données : ")
 
 def get_master_port():
-    """Récupère le port du serveur Master depuis la ligne de commande"""
-    return int(sys.argv[2])
+    """Retourne le port du serveur Master fourni par l'interface"""
+    return int(input("Entrez le port du serveur Master : "))
 
 if __name__ == "__main__":
-    db_ip = get_db_ip()  # IP de la base de données
-    master_port = get_master_port()  # Port du serveur Master
+    # Utiliser l'IP et le port provenant de l'interface graphique
+    db_ip = "localhost"  # Remplacez cette ligne par l'IP fournie par l'interface graphique
+    master_port = 6000   # Remplacez cette ligne par le port fourni par l'interface graphique
 
     recup_routeurs(db_ip)  # Récupérer les routeurs depuis la base de données
     master(db_ip, master_port)
