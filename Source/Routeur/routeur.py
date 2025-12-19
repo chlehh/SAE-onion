@@ -6,6 +6,10 @@ def routeur(master_ip, master_port, routeur_port):
     """Démarre un routeur et reçoit les messages chiffrés"""
     print(f"Routeur démarré sur le port {routeur_port}")
     
+    # Connexion au serveur Master pour récupérer l'IP de la base de données
+    db_ip = demander_ip_bdd_au_master(master_ip, master_port)
+    print(f"IP de la base de données reçue : {db_ip}")
+
     # Connexion au serveur Master pour récupérer les informations nécessaires
     chemin = demander_chemin_au_master(master_ip, master_port)
     print(f"Chemin reçu du Master : {chemin}")
@@ -29,7 +33,7 @@ def routeur(master_ip, master_port, routeur_port):
 
         # Si le prochain hop est un autre routeur, on transmet le message
         if next_hop in chemin:
-            ip, port = get_routeur_ip_and_port(next_hop, master_ip, master_port)
+            ip, port = get_routeur_ip_and_port(next_hop, db_ip)
             envoyer(ip, port, message_rest)
 
         # Si c'est un client, on envoie le message final
@@ -37,6 +41,19 @@ def routeur(master_ip, master_port, routeur_port):
             print(f"Message final envoyé au client {next_hop}: {message_rest}")
 
         conn.close()
+
+def demander_ip_bdd_au_master(master_ip, master_port):
+    """Demande l'IP de la base de données au serveur Master"""
+    s = socket.socket()
+    s.connect((master_ip, master_port))
+
+    message = "Routeur GET_DB_IP"
+    s.send(message.encode())
+
+    db_ip = s.recv(1024).decode()
+    s.close()
+
+    return db_ip
 
 def demander_chemin_au_master(master_ip, master_port):
     """Demande un chemin au serveur Master"""
@@ -51,26 +68,31 @@ def demander_chemin_au_master(master_ip, master_port):
 
     return chemin
 
-def get_routeur_ip_and_port(routeur, master_ip, master_port):
-    """Récupère l'IP et le port du routeur depuis le serveur Master"""
+def get_routeur_ip_and_port(routeur, db_ip):
+    """Récupère l'IP et le port du routeur depuis la base de données"""
     try:
-        conn = socket.socket()
-        conn.connect((master_ip, master_port))
-        message = f"Routeur GET_INFO {routeur}"
-        conn.send(message.encode())
+        conn = mariadb.connect(
+            host=db_ip,
+            user="toto",
+            password="toto",
+            database="table_routage"
+        )
+        cur = conn.cursor()
 
-        data = conn.recv(1024).decode().split(",")
+        # Rechercher les informations du routeur
+        cur.execute("SELECT adresse_ip, port FROM routeurs WHERE nom = %s", (routeur,))
+        row = cur.fetchone()
+
         conn.close()
 
-        if len(data) == 2:
-            ip, port = data
-            return ip, int(port)
+        if row:
+            return row
         else:
-            print(f"Erreur : Routeur {routeur} non trouvé ou mal configuré dans le Master.")
+            print(f"Erreur : Routeur {routeur} non trouvé dans la base de données.")
             sys.exit(1)
 
-    except Exception as e:
-        print(f"Erreur lors de la récupération des informations du routeur : {e}")
+    except mariadb.Error as e:
+        print(f"Erreur lors de la récupération des données de la DB : {e}")
         sys.exit(1)
 
 def envoyer(ip, port, message):
@@ -81,7 +103,7 @@ def envoyer(ip, port, message):
     s.close()
 
 if __name__ == "__main__":
-    if len(sys.argv) < 5:
+    if len(sys.argv) < 4:
         print("Usage : python routeur.py -m <MASTER_IP>:<MASTER_PORT> -p <ROUTEUR_PORT>")
         sys.exit(1)
 

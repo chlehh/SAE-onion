@@ -1,7 +1,8 @@
 import socket
-import random
 import mariadb
 import sys
+import random
+import time
 
 ROUTEURS = {}
 
@@ -70,6 +71,7 @@ def get_ip_locale():
     s.connect(("8.8.8.8", 80))  # Connecte à un serveur externe pour déterminer l'IP locale
     ip = s.getsockname()[0]
     s.close()
+    print(f"IP locale du serveur Master : {ip}")  # Affichage de l'IP locale
     return ip
 
 def master(db_ip, master_port):
@@ -77,53 +79,84 @@ def master(db_ip, master_port):
     host = "0.0.0.0"  # Écoute sur toutes les interfaces
     port = master_port
 
-    # Récupérer automatiquement l'IP locale de la machine
-    ip_master = get_ip_locale()  # Récupère l'IP locale automatiquement
+    ip_master = get_ip_locale()  # IP dynamique du Master
     print(f"MASTER en écoute sur {ip_master}:{port}...")
 
     server = socket.socket()
-    server.bind((host, port))
-    server.listen(5)
+    try:
+        server.bind((host, port))
+        server.listen(5)
+    except socket.error as e:
+        print(f"Erreur lors de l'ouverture du port {port}: {e}")
+        sys.exit(1)
 
     while True:
-        conn, addr = server.accept()
-        print("Client connecté :", addr)
+        try:
+            conn, addr = server.accept()
+            print(f"Client connecté : {addr}")
 
-        data = conn.recv(1024).decode()
-        print("Reçu du client :", data)
+            data = conn.recv(1024).decode()
+            print("Reçu du client :", data)
 
-        parts = data.split()
+            # Si un routeur demande l'IP de la base de données, on lui renvoie
+            if data == "Routeur GET_DB_IP":
+                conn.send(db_ip.encode())  # Envoie l'IP de la base de données
+                print(f"IP de la base de données envoyée : {db_ip}")
+                conn.close()
+                continue
 
-        nom_client = parts[0]  # Nom du client (par exemple "CLIENT1")
-        nb_sauts = int(parts[1])  # Nombre de sauts choisi par le client
-        routeurs_choisis = parts[2:]  # Liste des routeurs choisis par le client
+            parts = data.split()
 
-        print(f"Client {nom_client} a choisi {nb_sauts} sauts avec les routeurs : {routeurs_choisis}")
+            nom_client = parts[0]  # Nom du client (par exemple "CLIENT1")
 
-        chemin = generer_chemin(nb_sauts, routeurs_choisis)
-        chemin_str = ",".join(chemin)
+            # Vérifier si la commande est correcte (GET_PATH)
+            if len(parts) < 3:
+                print(f"Erreur : La commande est mal formée.")
+                conn.send("Erreur : Commande mal formée.".encode())
+                conn.close()
+                continue
 
-        # Enregistrer un log
-        message_id = f"{nom_client}-{nb_sauts}-{chemin_str}"
-        enregistrer_log(message_id, "MASTER", db_ip)
+            if parts[1] == "GET_PATH":
+                try:
+                    nb_sauts = int(parts[2])  # Le nombre de sauts est dans parts[2]
+                except ValueError:
+                    print(f"Erreur : Le nombre de sauts n'est pas valide.")
+                    conn.send(b"Erreur : Nombre de sauts invalide.")
+                    conn.close()
+                    continue
+            else:
+                print(f"Erreur : Commande inconnue reçue ({data})")
+                conn.send(b"Erreur : Commande inconnue.")
+                conn.close()
+                continue
 
-        conn.send(chemin_str.encode())
-        print(f"Chemin envoyé :", chemin_str)
+            routeurs_choisis = parts[3:]  # Liste des routeurs choisis par le client
 
-        conn.close()
+            print(f"Client {nom_client} a choisi {nb_sauts} sauts avec les routeurs : {routeurs_choisis}")
 
-def get_db_ip():
-    """Retourne l'IP de la base de données fournie par l'interface"""
-    return input("Entrez l'IP de la base de données : ")
+            chemin = generer_chemin(nb_sauts, routeurs_choisis)
+            chemin_str = ",".join(chemin)
 
-def get_master_port():
-    """Retourne le port du serveur Master fourni par l'interface"""
-    return int(input("Entrez le port du serveur Master : "))
+            # Enregistrer un log
+            message_id = f"{nom_client}-{nb_sauts}-{chemin_str}"
+            enregistrer_log(message_id, "MASTER", db_ip)
+
+            conn.send(chemin_str.encode())
+            print(f"Chemin envoyé :", chemin_str)
+
+            conn.close()
+
+        except socket.error as e:
+            print(f"Erreur de connexion avec le client : {e}")
 
 if __name__ == "__main__":
-    # Utiliser l'IP et le port provenant de l'interface graphique
-    db_ip = "localhost"  # Remplacez cette ligne par l'IP fournie par l'interface graphique
-    master_port = 6000   # Remplacez cette ligne par le port fourni par l'interface graphique
+    # L'IP de la base de données et le port du serveur Master sont fournis via la ligne de commande
+    if len(sys.argv) < 3:
+        print("Usage : python serveur_master.py <DB_IP> <MASTER_PORT>")
+        sys.exit(1)
+
+    db_ip = sys.argv[1]  # IP de la base de données
+    master_port = int(sys.argv[2])  # Port du serveur Master
 
     recup_routeurs(db_ip)  # Récupérer les routeurs depuis la base de données
-    master(db_ip, master_port)
+    master(db_ip, master_port)  # Démarrer le serveur Master

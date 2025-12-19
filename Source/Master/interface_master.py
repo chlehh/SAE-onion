@@ -1,58 +1,113 @@
 import sys
 import socket
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton
+import mariadb
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QPushButton
 from PyQt6.QtCore import pyqtSignal
-from interface_master_connexion import InterfaceMasterConnexion  # Ajoutez cette ligne pour l'importation
 
 class InterfaceMaster(QWidget):
-    signal_connexion = pyqtSignal(str, int)  # Signal pour envoyer les infos de connexion vers la deuxième interface
+    signal_connexion = pyqtSignal(str, int)  # Signal pour envoyer les infos de connexion vers la fonction master
 
-    def __init__(self):
+    def __init__(self, db_ip):  # Recevoir l'IP de la base de données
         super().__init__()
-        self.setWindowTitle("Serveur Master - Connexion")
-        self.setGeometry(200, 200, 600, 400)
+        self.setWindowTitle("Serveur Master - Interface")
+        self.setGeometry(200, 200, 600, 500)
+
+        self.db_ip = db_ip  # Assigner l'IP de la base de données à un attribut de la classe
 
         # Layout principal pour l'interface
         layout = QVBoxLayout()
 
-        # Barre en rouge pour afficher l'IP du serveur Master
-        self.barre_ip = QLineEdit(self)
-        self.barre_ip.setText(self.get_ip_master())  # Récupère l'IP de la machine locale (Master)
-        self.barre_ip.setStyleSheet("background-color: red; color: white;")
-        self.barre_ip.setReadOnly(True)  # L'IP est automatiquement affichée mais non modifiable ici
-        layout.addWidget(self.barre_ip)
+        # Affichage de l'IP du serveur Master
+        self.ip_master_label = QLabel(f"IP du serveur Master : {self.get_ip_master()}")
+        layout.addWidget(self.ip_master_label)
 
-        # Entrée pour l'IP de la base de données et port du serveur Master
-        self.ip_db_label = QLabel("IP de la base de données:")
-        self.ip_db_input = QLineEdit(self)
+        # Affichage des routeurs connectés
+        self.text_routeurs_label = QLabel("Routeurs connectés :")
+        self.text_routeurs = QTextEdit(self)
+        self.text_routeurs.setReadOnly(True)
+        layout.addWidget(self.text_routeurs_label)
+        layout.addWidget(self.text_routeurs)
 
-        self.port_master_label = QLabel("Port du serveur Master:")
-        self.port_master_input = QLineEdit(self)
+        # Affichage des clients connectés
+        self.text_clients_label = QLabel("Clients connectés :")
+        self.text_clients = QTextEdit(self)
+        self.text_clients.setReadOnly(True)
+        layout.addWidget(self.text_clients_label)
+        layout.addWidget(self.text_clients)
 
-        self.bouton_connexion = QPushButton("Se connecter", self)
-        self.bouton_connexion.clicked.connect(self.on_connexion)
+        # Affichage des logs
+        self.text_logs_label = QLabel("Logs :")
+        self.text_logs = QTextEdit(self)
+        self.text_logs.setReadOnly(True)
+        layout.addWidget(self.text_logs_label)
+        layout.addWidget(self.text_logs)
 
-        layout.addWidget(self.ip_db_label)
-        layout.addWidget(self.ip_db_input)
-        layout.addWidget(self.port_master_label)
-        layout.addWidget(self.port_master_input)
-        layout.addWidget(self.bouton_connexion)
+        # Bouton pour actualiser la liste des routeurs et clients
+        self.btn_refresh = QPushButton("Actualiser")
+        self.btn_refresh.clicked.connect(self.load_routeurs)
+        layout.addWidget(self.btn_refresh)
 
+        # Définir le layout principal
         self.setLayout(layout)
 
+        # Récupérer les routeurs et clients depuis la base de données
+        self.load_routeurs()
+
     def get_ip_master(self):
-        """Récupère l'IP locale de la machine"""
-        return socket.gethostbyname(socket.gethostname())  # IP de la machine locale (Master)
+        """Retourne l'IP locale de la machine"""
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))  # Connecte à un serveur pour obtenir l'IP locale
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
 
-    def on_connexion(self):
-        """Lorsqu'on appuie sur 'Se connecter', émettre les informations de connexion."""
-        ip_db = self.ip_db_input.text()  # IP de la base de données
-        port_master = int(self.port_master_input.text())  # Port du serveur Master
-        self.signal_connexion.emit(ip_db, port_master)
-        self.ouvrir_deuxieme_interface(ip_db, port_master)
+    def load_routeurs(self):
+        """Charge et affiche les routeurs depuis la base de données"""
+        try:
+            # Récupérer les informations depuis la base de données (DB)
+            conn = mariadb.connect(
+                host=self.db_ip,  # Utilisation de l'IP de la base de données
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("SELECT nom, adresse_ip, port FROM routeurs WHERE type='routeur'")
+            routeurs = cur.fetchall()
+            conn.close()
 
-    def ouvrir_deuxieme_interface(self, ip_db, port_master):
-        """Ouvre la deuxième interface une fois la connexion établie."""
-        self.deuxieme_interface = InterfaceMasterConnexion(ip_db, port_master)
-        self.deuxieme_interface.show()
-        self.close()
+            # Afficher les routeurs dans le QTextEdit
+            self.text_routeurs.clear()
+            for r in routeurs:
+                self.text_routeurs.append(f"{r[0]} - {r[1]}:{r[2]}")
+
+            self.text_logs.append("Routeurs actualisés.")
+
+            # Afficher les clients
+            self.load_clients()
+
+        except Exception as e:
+            self.text_logs.append(f"Erreur DB (routeurs) : {str(e)}")
+
+    def load_clients(self):
+        """Charge et affiche les clients depuis la base de données"""
+        try:
+            # Récupérer les clients de la base de données
+            conn = mariadb.connect(
+                host=self.db_ip,  # Utilisation de l'IP de la base de données
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("SELECT nom, adresse_ip FROM routeurs WHERE type='client'")
+            clients = cur.fetchall()
+            conn.close()
+
+            # Afficher les clients dans le QTextEdit
+            self.text_clients.clear()
+            for client in clients:
+                self.text_clients.append(f"{client[0]} - {client[1]}")
+
+        except Exception as e:
+            self.text_logs.append(f"Erreur DB (clients) : {str(e)}")

@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QCheckBox, QPushButton, QLineEdit, QSpinBox
 import socket
+from PyQt6.QtCore import pyqtSignal  # Ajouter cet import
 
 class InterfaceClientChoix(QWidget):
     def __init__(self, ip_master, port_master, port_client):
