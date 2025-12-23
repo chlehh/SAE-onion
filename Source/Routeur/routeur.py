@@ -1,114 +1,161 @@
 import socket
+import threading
 import mariadb
 import sys
 
-def routeur(master_ip, master_port, routeur_port):
-    """Démarre un routeur et reçoit les messages chiffrés"""
-    print(f"Routeur démarré sur le port {routeur_port}")
-    
-    # Connexion au serveur Master pour récupérer l'IP de la base de données
-    db_ip = demander_ip_bdd_au_master(master_ip, master_port)
-    print(f"IP de la base de données reçue : {db_ip}")
+# Dictionnaires pour stocker les informations des routeurs et clients
+ROUTEURS = {}
+CLIENTS = {}
 
-    # Connexion au serveur Master pour récupérer les informations nécessaires
-    chemin = demander_chemin_au_master(master_ip, master_port)
-    print(f"Chemin reçu du Master : {chemin}")
-
-    # Démarre l'écoute sur le port spécifié pour le routeur
-    server = socket.socket()
-    server.bind(("0.0.0.0", routeur_port))
-    server.listen(5)
-
-    print(f"Routeur en écoute sur {routeur_port}...")
-
-    while True:
-        conn, addr = server.accept()
-        print(f"Message reçu de {addr}")
-        data = conn.recv(1024).decode()
-
-        print(f"Message reçu : {data}")
-
-        # Déchiffrement de la couche du message
-        next_hop, message_rest = data.split("|", 1)
-
-        # Si le prochain hop est un autre routeur, on transmet le message
-        if next_hop in chemin:
-            ip, port = get_routeur_ip_and_port(next_hop, db_ip)
-            envoyer(ip, port, message_rest)
-
-        # Si c'est un client, on envoie le message final
-        else:
-            print(f"Message final envoyé au client {next_hop}: {message_rest}")
-
-        conn.close()
-
-def demander_ip_bdd_au_master(master_ip, master_port):
-    """Demande l'IP de la base de données au serveur Master"""
-    s = socket.socket()
-    s.connect((master_ip, master_port))
-
-    message = "Routeur GET_DB_IP"
-    s.send(message.encode())
-
-    db_ip = s.recv(1024).decode()
-    s.close()
-
-    return db_ip
-
-def demander_chemin_au_master(master_ip, master_port):
-    """Demande un chemin au serveur Master"""
-    s = socket.socket()
-    s.connect((master_ip, master_port))
-
-    message = "Routeur GET_PATH 3"  # Exemple pour 3 sauts
-    s.send(message.encode())
-
-    chemin = s.recv(1024).decode().split(",")
-    s.close()
-
-    return chemin
-
-def get_routeur_ip_and_port(routeur, db_ip):
-    """Récupère l'IP et le port du routeur depuis la base de données"""
+def recup_routeurs_client(db_ip):
+    """Récupère les informations des routeurs et des clients de la base de données."""
+    global ROUTEURS, CLIENTS
     try:
         conn = mariadb.connect(
-            host=db_ip,
+            host=db_ip,  # IP de la base de données passée en paramètre
             user="toto",
             password="toto",
             database="table_routage"
         )
         cur = conn.cursor()
 
-        # Rechercher les informations du routeur
-        cur.execute("SELECT adresse_ip, port FROM routeurs WHERE nom = %s", (routeur,))
-        row = cur.fetchone()
+        # Récupérer les informations des routeurs
+        cur.execute("SELECT nom, adresse_ip, port, cle_publique, next_hop FROM routeurs WHERE type='routeur'")
+        rows_routeurs = cur.fetchall()
+
+        # Récupérer les informations des clients
+        cur.execute("SELECT nom, adresse_ip, port, cle_publique, next_hop FROM routeurs WHERE type='client'")
+        rows_clients = cur.fetchall()
 
         conn.close()
 
-        if row:
-            return row
-        else:
-            print(f"Erreur : Routeur {routeur} non trouvé dans la base de données.")
-            sys.exit(1)
+        # Remplir le dictionnaire des routeurs
+        ROUTEURS = {}
+        for nom, ip, port, cle_publique, next_hop in rows_routeurs:
+            ROUTEURS[nom] = (ip, port, cle_publique, next_hop)
+
+        # Remplir le dictionnaire des clients
+        CLIENTS = {}
+        for nom, ip, port, cle_publique, next_hop in rows_clients:
+            CLIENTS[nom] = (ip, port, cle_publique, next_hop)
+
+        print("Routeurs et clients récupérés depuis la base de données.")
 
     except mariadb.Error as e:
         print(f"Erreur lors de la récupération des données de la DB : {e}")
         sys.exit(1)
 
-def envoyer(ip, port, message):
-    """Envoie le message au prochain routeur ou client"""
-    s = socket.socket()
-    s.connect((ip, port))
-    s.send(message.encode())
+def get_ip():
+    """Récupère l'IP locale de la machine pour l'utiliser dans l'envoi de données vers la base."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Création d'un socket UDP vide
+    s.connect(("8.8.8.8", 80))  # Connexion vers Google pour déterminer l'IP sans envoyer de paquet
+    ip = s.getsockname()[0]  # Récupérer l'IP locale
     s.close()
+    return ip
 
-if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("Usage : python routeur.py -m <MASTER_IP>:<MASTER_PORT> -p <ROUTEUR_PORT>")
+def envoie_donne_db(nom, ip, port, type_objet, db_ip):
+    """Envoie les informations du routeur à la base de données du master."""
+    try:
+        conn = mariadb.connect(
+            host=db_ip,  # IP de la base de données
+            user="toto",
+            password="toto",
+            database="table_routage"
+        )
+        cur = conn.cursor()
+
+        # Insertion des données du routeur dans la base de données
+        query = """
+        INSERT INTO routeurs (nom, adresse_ip, port, type)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            adresse_ip = VALUES(adresse_ip),
+            port = VALUES(port),
+            type = VALUES(type)
+        """
+        cur.execute(query, (nom, ip, port, type_objet))
+        conn.commit()
+        conn.close()
+        print(f"Données envoyées à la base de données pour {nom}.")
+
+    except mariadb.Error as e:
+        print(f"Erreur lors de l'envoi des données dans la DB : {e}")
         sys.exit(1)
 
-    master_ip, master_port = sys.argv[2].split(":")
-    master_port = int(master_port)
-    routeur_port = int(sys.argv[4])
+def envoyer(ip, port, message):
+    """Envoie un message à un autre routeur ou client de manière asynchrone."""
+    try:
+        s = socket.socket()
+        s.connect((ip, port))
+        s.send(message.encode())
+        s.close()
+    except socket.error as e:
+        print(f"Erreur lors de l'envoi du message à {ip}:{port}: {e}")
+        sys.exit(1)
 
-    routeur(master_ip, master_port, routeur_port)
+def traitement_message(nom, message):
+    """Traite le message reçu et décide du prochain hop."""
+    print(f"{nom} a reçu : {message}")
+
+    try:
+        # Découper le message pour obtenir la prochaine étape (next hop) et la partie restante du message
+        parts = message.split("|", 1)
+        next_hop = parts[0]  # Next hop (routeur ou client)
+        rest = parts[1]  # Le reste du message à envoyer
+
+        # Si le prochain hop est un routeur
+        if next_hop in ROUTEURS:
+            nip, nport, cle_publique, next_hop_bdd = ROUTEURS[next_hop]
+            envoyer(nip, nport, rest)
+            print(f"{nom} → a transmis à {next_hop}")
+
+        # Si le prochain hop est un client
+        elif next_hop in CLIENTS:
+            nip, nport, cle_publique, next_hop_bdd = CLIENTS[next_hop]
+            envoyer(nip, nport, rest)
+            print(f"{nom} → message final envoyé au client !")
+
+        else:
+            print(f"{nom} : Next hop inconnu :", next_hop)
+    except Exception as e:
+        print(f"Erreur lors du traitement du message : {e}")
+
+def traitement_reception(nom, ip, port):
+    """Écoute les messages reçus par le routeur et crée un thread pour chaque message."""
+    print(f"{nom} écoute sur {ip}:{port}")
+
+    s = socket.socket()
+    s.bind((ip, port))
+    s.listen(5)
+
+    while True:
+        conn, addr = s.accept()
+        message = conn.recv(1024).decode()
+        conn.close()
+
+        # Chaque message reçu crée un nouveau thread pour le traiter
+        threading.Thread(target=traitement_message, args=(nom, message)).start()
+
+def base_de_donne(nom, port, db_ip):
+    """Envoie les informations du routeur à la base de données."""
+    ip_locale = get_ip()
+    envoie_donne_db(nom, ip_locale, port, "routeur", db_ip)
+    recup_routeurs_client(db_ip)
+
+def routeur(nom, port, db_ip):
+    """Fonction principale du routeur"""
+    base_de_donne(nom, port, db_ip)
+    t = threading.Thread(target=traitement_reception, args=(nom, "0.0.0.0", port))
+    t.start()
+
+if __name__ == "__main__":
+    # Vérification des arguments
+    if len(sys.argv) != 4:
+        print("Utilisation : python3 routeur.py <NOM_ROUTEUR> <PORT> <DB_IP>")
+        sys.exit(1)
+
+    nom_routeur = sys.argv[1]  # Nom du routeur
+    port_routeur = int(sys.argv[2])  # Port du routeur
+    db_ip = sys.argv[3]  # IP de la base de données
+
+    routeur(nom_routeur, port_routeur, db_ip)

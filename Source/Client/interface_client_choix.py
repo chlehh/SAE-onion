@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QCheckBox, QPushButton, QLineEdit, QSpinBox
 import socket
-from PyQt6.QtCore import pyqtSignal  # Ajouter cet import
+import mariadb
 
 class InterfaceClientChoix(QWidget):
     def __init__(self, ip_master, port_master, port_client):
@@ -32,7 +32,7 @@ class InterfaceClientChoix(QWidget):
         # Sélection des routeurs
         self.routeur_selection_label = QLabel("Sélectionnez les routeurs :")
         self.routeurs_checkbox = []
-        
+
         # Ajouter une zone pour l'IP du deuxième client
         self.ip_client_label = QLabel("IP du deuxième client :")
         self.ip_client_input = QLineEdit(self)
@@ -67,6 +67,7 @@ class InterfaceClientChoix(QWidget):
 
         self.setLayout(layout)
 
+        # Récupérer les routeurs depuis la base de données du serveur master
         self.load_routeurs()
 
     def get_ip_client(self):
@@ -75,15 +76,31 @@ class InterfaceClientChoix(QWidget):
 
     def load_routeurs(self):
         """Charge les routeurs à partir du serveur Master"""
-        # Pour simplifier, ajoutons des routeurs fictifs
-        self.text_routeurs.setText("Routeur1 - 192.168.1.1:6001\nRouteur2 - 192.168.1.2:6002\nRouteur3 - 192.168.1.3:6003")
+        try:
+            conn = mariadb.connect(
+                host=self.ip_master,  # Utilisation de l'IP du serveur master
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("SELECT nom, adresse_ip, port FROM routeurs WHERE type='routeur'")
+            routeurs = cur.fetchall()
+            conn.close()
 
-        # Créer dynamiquement des cases à cocher pour chaque routeur
-        routeurs = ["Routeur1", "Routeur2", "Routeur3"]
-        for routeur in routeurs:
-            routeur_checkbox = QCheckBox(routeur, self)
-            self.routeurs_checkbox.append(routeur_checkbox)
-            self.layout().addWidget(routeur_checkbox)
+            # Afficher les routeurs dans le QTextEdit
+            self.text_routeurs.clear()
+            for r in routeurs:
+                self.text_routeurs.append(f"{r[0]} - {r[1]}:{r[2]}")
+
+            # Créer dynamiquement des cases à cocher pour chaque routeur
+            for r in routeurs:
+                routeur_checkbox = QCheckBox(r[0], self)
+                self.routeurs_checkbox.append(routeur_checkbox)
+                self.layout().addWidget(routeur_checkbox)
+
+        except mariadb.Error as e:
+            print(f"Erreur DB (routeurs) : {str(e)}")
 
     def on_send(self):
         """Lorsqu'on appuie sur 'Envoyer Message', on envoie les informations au Master"""
@@ -105,10 +122,6 @@ class InterfaceClientChoix(QWidget):
         print(f"Message à envoyer : {message}")
         print(f"Nombre de sauts sélectionnés : {nb_sauts}")
 
-        # Simuler l'envoi du message en oignon
-        chemin = self.demander_chemin_au_master(nb_sauts)
-        print(f"Chemin sélectionné par le client : {chemin}")
-
         # Construire le message en oignon
         onion_message = self.construire_oignon(routeurs_choisis, message)
         print(f"Oignon construit : {onion_message}")
@@ -117,11 +130,6 @@ class InterfaceClientChoix(QWidget):
         premier_routeur = routeurs_choisis[0]  # Prendre le premier routeur sélectionné
         ip, port = self.get_routeur_ip_and_port(premier_routeur)
         self.envoyer_message(ip, port, onion_message)
-
-    def demander_chemin_au_master(self, nb_sauts):
-        """Demande un chemin au serveur Master"""
-        # Pour simuler la demande de chemin au serveur Master
-        return ["Routeur1", "Routeur2", "Routeur3"][:nb_sauts]
 
     def construire_oignon(self, chemin, message_final):
         """Construit un message en oignon avec les informations de chaque routeur"""
@@ -137,9 +145,6 @@ class InterfaceClientChoix(QWidget):
         """Récupère l'IP et le port du routeur"""
         # Pour simplifier, nous retournons des informations fictives
         ROUTEURS = {
-            "Routeur1": ("192.168.1.1", 6001),
-            "Routeur2": ("192.168.1.2", 6002),
-            "Routeur3": ("192.168.1.3", 6003)
         }
         return ROUTEURS.get(routeur, ("", 0))
 

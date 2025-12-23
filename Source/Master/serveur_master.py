@@ -1,10 +1,41 @@
 import socket
 import mariadb
 import sys
-import random
 import time
 
 ROUTEURS = {}
+CLIENTS = {}
+
+def check_routeur_status(routeur_ip, routeur_port):
+    """Vérifie si un routeur est toujours en ligne."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2)  # Timeout de 2 secondes pour la connexion
+        s.connect((routeur_ip, routeur_port))
+        s.close()
+        print(f"Routeur {routeur_ip}:{routeur_port} est actif.")
+        return True
+    except (socket.error, socket.timeout):
+        print(f"Routeur {routeur_ip}:{routeur_port} est inactif.")
+        return False
+
+def remove_inactive_routeur(routeur_nom, db_ip):
+    """Supprime un routeur inactif de la base de données."""
+    try:
+        print(f"Tentative de suppression du routeur {routeur_nom} de la base de données...")
+        conn = mariadb.connect(
+            host=db_ip,
+            user="toto",
+            password="toto",
+            database="table_routage"
+        )
+        cur = conn.cursor()
+        cur.execute("DELETE FROM routeurs WHERE nom = %s", (routeur_nom,))
+        conn.commit()
+        conn.close()
+        print(f"Routeur {routeur_nom} supprimé de la base de données.")
+    except mariadb.Error as e:
+        print(f"Erreur lors de la suppression du routeur de la DB : {e}")
 
 def recup_routeurs(db_ip):
     """Récupère les informations des routeurs depuis la base de données"""
@@ -23,24 +54,38 @@ def recup_routeurs(db_ip):
 
         conn.close()
 
-        global ROUTEURS
-        ROUTEURS = {}
+        routeurs = {}
         for nom, ip, port, cle_publique in rows_routeurs:
-            ROUTEURS[nom] = (ip, port, cle_publique)
+            routeurs[nom] = {"ip": ip, "port": port, "cle_publique": cle_publique}
 
-        print("Routeurs récupérés:", ROUTEURS)
+        return routeurs
 
     except mariadb.Error as e:
         print(f"Erreur lors de la récupération des données de la DB : {e}")
         sys.exit(1)
 
-def generer_chemin(nb_sauts, routeurs_choisis):
-    """Génère un chemin en fonction du nombre de sauts et des routeurs sélectionnés"""
-    if nb_sauts > len(routeurs_choisis):
-        nb_sauts = len(routeurs_choisis)
+def enregistrer_routeur(nom, ip, port, cle_publique, db_ip):
+    """Enregistre un routeur dans la base de données"""
+    try:
+        conn = mariadb.connect(
+            host=db_ip,
+            user="toto",
+            password="toto",
+            database="table_routage"
+        )
+        cur = conn.cursor()
 
-    chemin = random.sample(routeurs_choisis, nb_sauts)
-    return chemin
+        # Enregistrer le routeur dans la base de données
+        cur.execute("INSERT INTO routeurs (nom, adresse_ip, port, cle_publique, type) VALUES (?, ?, ?, ?, ?)",
+                    (nom, ip, port, cle_publique, 'routeur'))
+        conn.commit()
+        conn.close()
+
+        print(f"Routeur {nom} enregistré dans la base de données.")
+    
+    except mariadb.Error as e:
+        print(f"Erreur lors de l'enregistrement du routeur dans la DB : {e}")
+        sys.exit(1)
 
 def enregistrer_log(message_id, routeur, db_ip):
     """Enregistre les logs dans la base de données"""
@@ -54,7 +99,7 @@ def enregistrer_log(message_id, routeur, db_ip):
         cur = conn.cursor()
 
         # Insérer un log
-        cur.execute("INSERT INTO logs (message_id, routeur) VALUES (%s, %s)", (message_id, routeur))
+        cur.execute("INSERT INTO logs (message_id, routeur) VALUES (?, ?)", (message_id, routeur))
 
         conn.commit()
         conn.close()
@@ -65,22 +110,12 @@ def enregistrer_log(message_id, routeur, db_ip):
         print(f"Erreur lors de l'enregistrement des logs : {e}")
         sys.exit(1)
 
-def get_ip_locale():
-    """Retourne l'IP locale de la machine"""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))  # Connecte à un serveur externe pour déterminer l'IP locale
-    ip = s.getsockname()[0]
-    s.close()
-    print(f"IP locale du serveur Master : {ip}")  # Affichage de l'IP locale
-    return ip
-
 def master(db_ip, master_port):
-    """Serveur Master qui gère la demande de chemin"""
+    """Serveur Master qui gère la demande des clients pour récupérer la liste des routeurs"""
     host = "0.0.0.0"  # Écoute sur toutes les interfaces
     port = master_port
 
-    ip_master = get_ip_locale()  # IP dynamique du Master
-    print(f"MASTER en écoute sur {ip_master}:{port}...")
+    print(f"MASTER en écoute sur {host}:{port}...")
 
     server = socket.socket()
     try:
@@ -98,65 +133,92 @@ def master(db_ip, master_port):
             data = conn.recv(1024).decode()
             print("Reçu du client :", data)
 
-            # Si un routeur demande l'IP de la base de données, on lui renvoie
-            if data == "Routeur GET_DB_IP":
-                conn.send(db_ip.encode())  # Envoie l'IP de la base de données
-                print(f"IP de la base de données envoyée : {db_ip}")
-                conn.close()
-                continue
+            if data.startswith("Routeur"):
+                # Enregistrement du routeur
+                parts = data.split()
+                nom_routeur = parts[1]
+                ip_routeur = addr[0]
+                port_routeur = int(parts[2])
+                cle_publique = parts[3]
 
-            parts = data.split()
+                enregistrer_routeur(nom_routeur, ip_routeur, port_routeur, cle_publique, db_ip)
 
-            nom_client = parts[0]  # Nom du client (par exemple "CLIENT1")
-
-            # Vérifier si la commande est correcte (GET_PATH)
-            if len(parts) < 3:
-                print(f"Erreur : La commande est mal formée.")
-                conn.send("Erreur : Commande mal formée.".encode())
-                conn.close()
-                continue
-
-            if parts[1] == "GET_PATH":
-                try:
-                    nb_sauts = int(parts[2])  # Le nombre de sauts est dans parts[2]
-                except ValueError:
-                    print(f"Erreur : Le nombre de sauts n'est pas valide.")
-                    conn.send(b"Erreur : Nombre de sauts invalide.")
-                    conn.close()
-                    continue
-            else:
-                print(f"Erreur : Commande inconnue reçue ({data})")
-                conn.send(b"Erreur : Commande inconnue.")
-                conn.close()
-                continue
-
-            routeurs_choisis = parts[3:]  # Liste des routeurs choisis par le client
-
-            print(f"Client {nom_client} a choisi {nb_sauts} sauts avec les routeurs : {routeurs_choisis}")
-
-            chemin = generer_chemin(nb_sauts, routeurs_choisis)
-            chemin_str = ",".join(chemin)
-
-            # Enregistrer un log
-            message_id = f"{nom_client}-{nb_sauts}-{chemin_str}"
-            enregistrer_log(message_id, "MASTER", db_ip)
-
-            conn.send(chemin_str.encode())
-            print(f"Chemin envoyé :", chemin_str)
+            # Gestion des clients qui demandent la liste des routeurs
+            elif data == "GET_ROUTEURS":
+                routeurs = recup_routeurs(db_ip)
+                conn.send(str(routeurs).encode())
+                print(f"Liste des routeurs envoyée au client {addr}")
 
             conn.close()
 
         except socket.error as e:
             print(f"Erreur de connexion avec le client : {e}")
 
+def monitor_routeurs(db_ip, interval=60):
+    """Surveille les routeurs actifs et supprime ceux qui sont inactifs."""
+    while True:
+        # Se connecter à la base de données et récupérer la liste des routeurs
+        try:
+            conn = mariadb.connect(
+                host=db_ip,
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("SELECT nom, adresse_ip, port FROM routeurs WHERE type = 'routeur'")
+            routeurs = cur.fetchall()
+            conn.close()
+
+            # Vérifier chaque routeur
+            for routeur in routeurs:
+                nom, ip, port = routeur
+                if not check_routeur_status(ip, port):  # Si le routeur est inactif
+                    print(f"{nom} est inactif. Suppression de la base de données.")
+                    remove_inactive_routeur(nom, db_ip)
+
+        except mariadb.Error as e:
+            print(f"Erreur lors de la récupération des routeurs de la DB : {e}")
+
+        # Attendre l'intervalle avant de vérifier à nouveau
+        time.sleep(interval)
+
+def check_routeur_status(routeur_ip, routeur_port):
+    """Vérifie si un routeur est toujours en ligne."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2)  # Timeout de 2 secondes pour la connexion
+        s.connect((routeur_ip, routeur_port))
+        s.close()
+        return True
+    except (socket.error, socket.timeout):
+        return False
+
+def remove_inactive_routeur(routeur_nom, db_ip):
+    """Supprime un routeur inactif de la base de données."""
+    try:
+        print(f"Tentative de suppression du routeur {routeur_nom} de la base de données...")
+        conn = mariadb.connect(
+            host=db_ip,
+            user="toto",
+            password="toto",
+            database="table_routage"
+        )
+        cur = conn.cursor()
+        cur.execute("DELETE FROM routeurs WHERE nom = %s", (routeur_nom,))
+        conn.commit()
+        conn.close()
+        print(f"Routeur {routeur_nom} supprimé de la base de données.")
+    except mariadb.Error as e:
+        print(f"Erreur lors de la suppression du routeur de la DB : {e}")
+
 if __name__ == "__main__":
-    # L'IP de la base de données et le port du serveur Master sont fournis via la ligne de commande
     if len(sys.argv) < 3:
-        print("Usage : python serveur_master.py <DB_IP> <MASTER_PORT>")
+        print("Usage : python3 serveur_master.py <DB_IP> <MASTER_PORT>")
         sys.exit(1)
 
-    db_ip = sys.argv[1]  # IP de la base de données
+    db_ip = sys.argv[1]  # L'IP de la base de données récupérée en ligne de commande
     master_port = int(sys.argv[2])  # Port du serveur Master
 
-    recup_routeurs(db_ip)  # Récupérer les routeurs depuis la base de données
-    master(db_ip, master_port)  # Démarrer le serveur Master
+    # Lancer le serveur master
+    monitor_routeurs(db_ip, interval=60)  # Vérifie tous les 60 secondes
