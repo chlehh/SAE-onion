@@ -198,7 +198,7 @@ def check_routeur_status(routeur_ip, routeur_port):
         return False
 
 def remove_inactive_routeur(routeur_nom, db_ip):
-    """Supprime un routeur inactif de la base de données."""
+    """Supprime un routeur inactif de la base de données.""" 
     try:
         print(f"Tentative de suppression du routeur {routeur_nom} de la base de données...")
         conn = mariadb.connect(
