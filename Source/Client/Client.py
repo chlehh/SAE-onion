@@ -1,16 +1,17 @@
 import sys
 from PyQt6.QtWidgets import QApplication
 from interface_client import InterfaceClient
-from interface_client_choix import InterfaceClientChoix
 
-def run_client_gui():
+def main():
     app = QApplication(sys.argv)
 
-    # Créer l'interface graphique pour se connecter au serveur Master
-    gui = InterfaceClient()
-    gui.show()
+    # Crée et affiche l'interface de connexion du client
+    window = InterfaceClient()
+    window.show()
 
     sys.exit(app.exec())
 
 if __name__ == "__main__":
-    run_client_gui()
+    main()
+
+

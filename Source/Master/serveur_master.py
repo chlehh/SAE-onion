@@ -160,8 +160,9 @@ def master(db_ip, master_port):
 def monitor_routeurs(db_ip, interval=60):
     """Surveille les routeurs actifs et supprime ceux qui sont inactifs."""
     while True:
-        # Se connecter à la base de données et récupérer la liste des routeurs
         try:
+            print("Vérification des routeurs...")  # Message pour déboguer
+            # Se connecter à la base de données et récupérer la liste des routeurs
             conn = mariadb.connect(
                 host=db_ip,
                 user="toto",
@@ -173,18 +174,28 @@ def monitor_routeurs(db_ip, interval=60):
             routeurs = cur.fetchall()
             conn.close()
 
+            print(f"Nombre de routeurs récupérés : {len(routeurs)}")  # Message de débogage
+
             # Vérifier chaque routeur
             for routeur in routeurs:
                 nom, ip, port = routeur
+                print(f"Vérification du routeur {nom} - {ip}:{port}")  # Message pour déboguer
                 if not check_routeur_status(ip, port):  # Si le routeur est inactif
                     print(f"{nom} est inactif. Suppression de la base de données.")
                     remove_inactive_routeur(nom, db_ip)
 
+            # Attendre l'intervalle avant de vérifier à nouveau
+            print(f"Attente de {interval} secondes avant la prochaine vérification...")
+            time.sleep(interval)
+
         except mariadb.Error as e:
             print(f"Erreur lors de la récupération des routeurs de la DB : {e}")
+            time.sleep(interval)  # Attendre avant de réessayer en cas d'erreur avec la DB
 
-        # Attendre l'intervalle avant de vérifier à nouveau
-        time.sleep(interval)
+        except Exception as e:
+            print(f"Erreur inattendue : {e}")
+            time.sleep(interval)  # Attendre avant de réessayer en cas d'erreur générale
+
 
 def check_routeur_status(routeur_ip, routeur_port):
     """Vérifie si un routeur est toujours en ligne."""

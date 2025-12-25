@@ -1,90 +1,81 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QCheckBox, QPushButton, QLineEdit, QSpinBox, QComboBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox, QTextEdit
 import socket
 import mariadb
+import random
 
 class InterfaceClientChoix(QWidget):
-    def __init__(self, ip_master, port_master, port_client):
+    def __init__(self, ip_master, port_master, port_client, client_name):
         super().__init__()
-        self.setWindowTitle("Client - Sélectionner les routeurs et le message")
+        self.setWindowTitle("Client - Choisir un Destinataire et Envoyer un Message")
         self.setGeometry(200, 200, 600, 500)
 
         self.ip_master = ip_master
         self.port_master = port_master
         self.port_client = port_client
+        self.client_name = client_name
         self.db_ip = None  # L'IP de la base de données sera reçue du serveur master
-
-        # Récupérer l'IP du client
-        self.client_ip = self.get_ip_client()
 
         # Layout principal pour la deuxième interface
         layout = QVBoxLayout()
 
-        # Afficher l'IP du client
-        self.ip_client_label = QLabel(f"IP du Client: {self.client_ip}")
+        # Affichage des informations
+        self.info_label = QLabel(f"Nom du client : {self.client_name}")
+        layout.addWidget(self.info_label)
+
+        self.ip_client_label = QLabel(f"IP du Client: {self.get_ip_client()}")
         layout.addWidget(self.ip_client_label)
 
-        # Affichage de l'état de la connexion au serveur master
         self.connexion_state_label = QLabel("État de la connexion au serveur master : Non connecté")
         layout.addWidget(self.connexion_state_label)
 
-        # Afficher les routeurs disponibles
+        # Section des routeurs avec cases à cocher
         self.text_routeurs_label = QLabel("Routeurs disponibles :")
-        self.text_routeurs = QTextEdit(self)
-        self.text_routeurs.setReadOnly(True)
         layout.addWidget(self.text_routeurs_label)
-        layout.addWidget(self.text_routeurs)
 
-        # Afficher les clients disponibles
+        # Créer un layout vertical pour afficher les cases à cocher des routeurs
+        self.routeurs_checkbox_layout = QVBoxLayout()  # Contiendra toutes les cases à cocher des routeurs
+        layout.addLayout(self.routeurs_checkbox_layout)  # Ajouter ce layout dans le layout principal
+
+        # Section des clients disponibles
         self.text_clients_label = QLabel("Clients disponibles :")
         self.text_clients = QComboBox(self)
         self.text_clients.addItem("Sélectionner un client")  # Option par défaut
         layout.addWidget(self.text_clients_label)
         layout.addWidget(self.text_clients)
 
-        # Sélection des routeurs
-        self.routeur_selection_label = QLabel("Sélectionnez les routeurs :")
-        self.routeurs_checkbox = []
+        # Section pour l'IP manuelle du destinataire
+        self.ip_dest_label = QLabel("IP du client destinataire :")
+        self.ip_dest_input = QLineEdit(self)
+        layout.addWidget(self.ip_dest_label)
+        layout.addWidget(self.ip_dest_input)
 
-        # Ajouter une zone pour l'IP du deuxième client
-        self.ip_client_label = QLabel("IP du deuxième client :")
-        self.ip_client_input = QLineEdit(self)
-        layout.addWidget(self.ip_client_label)
-        layout.addWidget(self.ip_client_input)
-
-        # Ajouter un champ pour saisir le message à envoyer
         self.message_label = QLabel("Message à envoyer :")
         self.message_input = QLineEdit(self)
         layout.addWidget(self.message_label)
         layout.addWidget(self.message_input)
 
-        # Champ pour saisir le nombre de sauts
         self.sauts_label = QLabel("Nombre de sauts :")
-        self.sauts_spinner = QSpinBox(self)
-        self.sauts_spinner.setMinimum(1)
-        self.sauts_spinner.setMaximum(10)
+        self.sauts_spinner = QLineEdit(self)
         layout.addWidget(self.sauts_label)
         layout.addWidget(self.sauts_spinner)
 
-        # Section pour les messages reçus
         self.messages_reçus_label = QLabel("Messages reçus :")
         self.messages_reçus_text = QTextEdit(self)
         self.messages_reçus_text.setReadOnly(True)
         layout.addWidget(self.messages_reçus_label)
         layout.addWidget(self.messages_reçus_text)
 
-        # Bouton d'envoi
         self.send_button = QPushButton("Envoyer Message", self)
         self.send_button.clicked.connect(self.on_send)
         layout.addWidget(self.send_button)
 
-        # Bouton pour recharger la base de données
         self.reload_db_button = QPushButton("Recharger la DB", self)
         self.reload_db_button.clicked.connect(self.reload_db)
         layout.addWidget(self.reload_db_button)
 
         self.setLayout(layout)
 
-        # Récupérer l'IP de la base de données et les routeurs et clients depuis le serveur master
+        # Ajouter les routeurs et clients dans la vue
         self.load_routeurs_and_clients()
 
     def get_ip_client(self):
@@ -93,7 +84,6 @@ class InterfaceClientChoix(QWidget):
         s.connect(("8.8.8.8", 80))  # Connexion à un serveur externe (Google DNS)
         ip = s.getsockname()[0]  # Récupère l'IP locale
         s.close()
-        print(f"Adresse IP récupérée : {ip}")
         return ip
 
     def load_routeurs_and_clients(self):
@@ -101,12 +91,12 @@ class InterfaceClientChoix(QWidget):
         try:
             # Connexion au serveur master pour obtenir l'IP de la base de données
             s = socket.socket()
-            s.connect((self.ip_master, self.port_master))
+            s.connect((self.ip_master, self.port_master))  # Connexion au serveur maître
             # Recevoir l'IP de la base de données
             self.db_ip = s.recv(1024).decode()
             print(f"IP de la base de données reçue : {self.db_ip}")
 
-            # Maintenant récupérer les routeurs et clients depuis la base de données
+            # Récupérer les routeurs et clients depuis la base de données
             conn = mariadb.connect(
                 host=self.db_ip,  # Utilisation de l'IP de la base de données
                 user="toto",
@@ -120,16 +110,16 @@ class InterfaceClientChoix(QWidget):
             routeurs = cur.fetchall()
             conn.close()
 
-            # Afficher les routeurs dans le QTextEdit
-            self.text_routeurs.clear()
-            for r in routeurs:
-                self.text_routeurs.append(f"{r[0]} - {r[1]}:{r[2]}")
+            # Supprimer les anciens widgets dans le layout des cases à cocher avant de les ajouter à nouveau
+            for i in reversed(range(self.routeurs_checkbox_layout.count())):
+                widget = self.routeurs_checkbox_layout.itemAt(i).widget()
+                if widget is not None:
+                    widget.deleteLater()
 
-            # Créer dynamiquement des cases à cocher pour chaque routeur
+            # Ajouter chaque routeur avec sa case à cocher dans la vue
             for r in routeurs:
-                routeur_checkbox = QCheckBox(r[0], self)
-                self.routeurs_checkbox.append(routeur_checkbox)
-                self.layout().addWidget(routeur_checkbox)
+                routeur_checkbox = QCheckBox(f"{r[0]} - {r[1]}:{r[2]}", self)  # Créer la case à cocher
+                self.routeurs_checkbox_layout.addWidget(routeur_checkbox)  # Ajouter la case à cocher au layout
 
             # Récupérer les clients disponibles
             conn = mariadb.connect(
@@ -156,66 +146,47 @@ class InterfaceClientChoix(QWidget):
             print(f"Erreur DB (routeurs/clients) : {str(e)}")
             self.connexion_state_label.setText("État de la connexion au serveur master : Erreur de connexion")
 
-    def reload_db(self):
-        """Recharger la base de données pour récupérer les derniers routeurs disponibles"""
-        self.load_routeurs_and_clients()
-
     def on_send(self):
-        """Lorsqu'on appuie sur 'Envoyer Message', on envoie les informations au Master"""
-        selected_routeurs = [checkbox.text() for checkbox in self.routeurs_checkbox if checkbox.isChecked()]
-        ip_client = self.ip_client_input.text()
+        """Envoyer un message au destinataire choisi"""
+        dest_client = self.text_clients.currentText()
+        manual_ip = self.ip_dest_input.text()  # IP du destinataire saisie manuellement
         message = self.message_input.text()
-        nb_sauts = self.sauts_spinner.value()
+        nb_sauts = self.sauts_spinner.text()
 
-        if nb_sauts > len(selected_routeurs):
-            self.show_error_message(f"Erreur : Vous avez sélectionné {nb_sauts} sauts, mais il n'y a que {len(selected_routeurs)} routeurs disponibles.")
+        if dest_client == "Sélectionner un client" and not manual_ip:
+            self.messages_reçus_text.append("Erreur: Veuillez sélectionner un client ou entrer une IP manuellement.")
             return
 
-        self.send_message(selected_routeurs, ip_client, message, nb_sauts)
+        if not message:
+            self.messages_reçus_text.append("Erreur: Veuillez entrer un message.")
+            return
 
-    def send_message(self, routeurs_choisis, ip_client, message, nb_sauts):
-        """Envoie le message au serveur Master avec les paramètres sélectionnés"""
-        print(f"Routeurs sélectionnés : {routeurs_choisis}")
-        print(f"IP du client à contacter : {ip_client}")
-        print(f"Message à envoyer : {message}")
-        print(f"Nombre de sauts sélectionnés : {nb_sauts}")
+        # Utiliser l'IP manuelle ou la sélection du client
+        if manual_ip:
+            dest_client = manual_ip
 
-        # Construire le message en oignon
-        onion_message = self.construire_oignon(routeurs_choisis, message)
-        print(f"Oignon construit : {onion_message}")
+        # Récupérer le nombre de sauts
+        try:
+            nb_sauts = int(nb_sauts)
+        except ValueError:
+            self.messages_reçus_text.append("Erreur: Le nombre de sauts doit être un entier.")
+            return
 
-        # Simuler l'envoi du message au premier routeur
-        premier_routeur = routeurs_choisis[0]  # Prendre le premier routeur sélectionné
-        ip, port = self.get_routeur_ip_and_port(premier_routeur)
-        self.envoyer_message(ip, port, onion_message)
+        # Sélectionner aléatoirement les routeurs en fonction du nombre de sauts
+        selected_routeurs = []
+        all_routeurs = [checkbox.text() for checkbox in self.routeurs_checkbox_layout.children() if isinstance(checkbox, QCheckBox)]
 
-    def construire_oignon(self, chemin, message_final):
-        """Construit un message en oignon avec les informations de chaque routeur"""
-        msg = f"{message_final}"
+        # Si aucun routeur n'est sélectionné, choisir des routeurs aléatoires
+        if not selected_routeurs:
+            selected_routeurs = random.sample(all_routeurs, min(nb_sauts, len(all_routeurs)))
 
-        # On remonte le chemin à l'envers pour créer les couches
-        for routeur in reversed(chemin):
-            msg = f"{routeur}|{msg}"
+        if not selected_routeurs:
+            self.messages_reçus_text.append("Erreur: Aucun routeur disponible pour les sauts.")
+            return
 
-        return msg
+        # Simuler l'envoi du message
+        self.messages_reçus_text.append(f"Message envoyé à {dest_client}: {message} (Sauts: {nb_sauts}, Routeurs: {', '.join(selected_routeurs)})")
 
-    def get_routeur_ip_and_port(self, routeur):
-        """Récupère l'IP et le port du routeur"""
-        ROUTEURS = {
-        }
-        return ROUTEURS.get(routeur, ("", 0))
-
-    def envoyer_message(self, ip, port, message):
-        """Envoie le message au routeur ou client suivant"""
-        s = socket.socket()
-        s.connect((ip, port))
-        s.send(message.encode())
-        s.close()
-
-    def show_error_message(self, message):
-        """Affiche un message d'erreur dans la section 'Messages reçus'"""
-        self.messages_reçus_text.append(f"ERREUR: {message}")
-
-    def add_received_message(self, message):
-        """Affiche un message reçu dans la section 'Messages reçus'"""
-        self.messages_reçus_text.append(f"Message reçu: {message}")
+    def reload_db(self):
+        """Recharger la base de données pour récupérer les derniers routeurs et clients"""
+        self.load_routeurs_and_clients()
