@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QCheckBox, QPushButton, QLineEdit, QSpinBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QCheckBox, QPushButton, QLineEdit, QSpinBox, QComboBox
 import socket
 import mariadb
 
@@ -11,6 +11,7 @@ class InterfaceClientChoix(QWidget):
         self.ip_master = ip_master
         self.port_master = port_master
         self.port_client = port_client
+        self.db_ip = None  # L'IP de la base de données sera reçue du serveur master
 
         # Récupérer l'IP du client
         self.client_ip = self.get_ip_client()
@@ -22,12 +23,23 @@ class InterfaceClientChoix(QWidget):
         self.ip_client_label = QLabel(f"IP du Client: {self.client_ip}")
         layout.addWidget(self.ip_client_label)
 
+        # Affichage de l'état de la connexion au serveur master
+        self.connexion_state_label = QLabel("État de la connexion au serveur master : Non connecté")
+        layout.addWidget(self.connexion_state_label)
+
         # Afficher les routeurs disponibles
         self.text_routeurs_label = QLabel("Routeurs disponibles :")
         self.text_routeurs = QTextEdit(self)
         self.text_routeurs.setReadOnly(True)
         layout.addWidget(self.text_routeurs_label)
         layout.addWidget(self.text_routeurs)
+
+        # Afficher les clients disponibles
+        self.text_clients_label = QLabel("Clients disponibles :")
+        self.text_clients = QComboBox(self)
+        self.text_clients.addItem("Sélectionner un client")  # Option par défaut
+        layout.addWidget(self.text_clients_label)
+        layout.addWidget(self.text_clients)
 
         # Sélection des routeurs
         self.routeur_selection_label = QLabel("Sélectionnez les routeurs :")
@@ -65,25 +77,45 @@ class InterfaceClientChoix(QWidget):
         self.send_button.clicked.connect(self.on_send)
         layout.addWidget(self.send_button)
 
+        # Bouton pour recharger la base de données
+        self.reload_db_button = QPushButton("Recharger la DB", self)
+        self.reload_db_button.clicked.connect(self.reload_db)
+        layout.addWidget(self.reload_db_button)
+
         self.setLayout(layout)
 
-        # Récupérer les routeurs depuis la base de données du serveur master
-        self.load_routeurs()
+        # Récupérer l'IP de la base de données et les routeurs et clients depuis le serveur master
+        self.load_routeurs_and_clients()
 
     def get_ip_client(self):
-        """Récupère l'IP locale du client"""
-        return socket.gethostbyname(socket.gethostname())
+        """Récupère l'IP locale du client dans un réseau local."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))  # Connexion à un serveur externe (Google DNS)
+        ip = s.getsockname()[0]  # Récupère l'IP locale
+        s.close()
+        print(f"Adresse IP récupérée : {ip}")
+        return ip
 
-    def load_routeurs(self):
-        """Charge les routeurs à partir du serveur Master"""
+    def load_routeurs_and_clients(self):
+        """Charge les routeurs et les clients à partir du serveur Master"""
         try:
+            # Connexion au serveur master pour obtenir l'IP de la base de données
+            s = socket.socket()
+            s.connect((self.ip_master, self.port_master))
+            # Recevoir l'IP de la base de données
+            self.db_ip = s.recv(1024).decode()
+            print(f"IP de la base de données reçue : {self.db_ip}")
+
+            # Maintenant récupérer les routeurs et clients depuis la base de données
             conn = mariadb.connect(
-                host=self.ip_master,  # Utilisation de l'IP du serveur master
+                host=self.db_ip,  # Utilisation de l'IP de la base de données
                 user="toto",
                 password="toto",
                 database="table_routage"
             )
             cur = conn.cursor()
+
+            # Récupérer les routeurs
             cur.execute("SELECT nom, adresse_ip, port FROM routeurs WHERE type='routeur'")
             routeurs = cur.fetchall()
             conn.close()
@@ -99,8 +131,34 @@ class InterfaceClientChoix(QWidget):
                 self.routeurs_checkbox.append(routeur_checkbox)
                 self.layout().addWidget(routeur_checkbox)
 
+            # Récupérer les clients disponibles
+            conn = mariadb.connect(
+                host=self.db_ip,  # Utilisation de l'IP de la base de données
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("SELECT nom FROM routeurs WHERE type='client'")
+            clients = cur.fetchall()
+            conn.close()
+
+            # Ajouter les clients au ComboBox
+            self.text_clients.clear()
+            self.text_clients.addItem("Sélectionner un client")
+            for c in clients:
+                self.text_clients.addItem(c[0])
+
+            # Changer l'état de la connexion
+            self.connexion_state_label.setText("État de la connexion au serveur master : Connecté")
+
         except mariadb.Error as e:
-            print(f"Erreur DB (routeurs) : {str(e)}")
+            print(f"Erreur DB (routeurs/clients) : {str(e)}")
+            self.connexion_state_label.setText("État de la connexion au serveur master : Erreur de connexion")
+
+    def reload_db(self):
+        """Recharger la base de données pour récupérer les derniers routeurs disponibles"""
+        self.load_routeurs_and_clients()
 
     def on_send(self):
         """Lorsqu'on appuie sur 'Envoyer Message', on envoie les informations au Master"""
@@ -143,7 +201,6 @@ class InterfaceClientChoix(QWidget):
 
     def get_routeur_ip_and_port(self, routeur):
         """Récupère l'IP et le port du routeur"""
-        # Pour simplifier, nous retournons des informations fictives
         ROUTEURS = {
         }
         return ROUTEURS.get(routeur, ("", 0))

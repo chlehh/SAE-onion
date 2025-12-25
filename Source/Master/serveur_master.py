@@ -130,6 +130,9 @@ def master(db_ip, master_port):
             conn, addr = server.accept()
             print(f"Client connecté : {addr}")
 
+            # Envoyer l'IP de la base de données au client
+            conn.send(db_ip.encode())  # Envoyer l'IP de la base de données
+
             data = conn.recv(1024).decode()
             print("Reçu du client :", data)
 
