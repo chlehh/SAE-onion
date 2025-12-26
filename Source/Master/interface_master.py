@@ -1,10 +1,10 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QPushButton
 from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QPushButton, QLineEdit, QTabWidget, QHBoxLayout, QFormLayout
 import socket
 import mariadb
 
 class InterfaceMaster(QWidget):
-    signal_connexion = pyqtSignal(str, int)  # Signal pour envoyer les infos de connexion vers la fonction master
+    signal_connexion = pyqtSignal()  # Signal pour démarrer le serveur master
 
     def __init__(self, db_ip):
         super().__init__()
@@ -16,33 +16,87 @@ class InterfaceMaster(QWidget):
         # Layout principal pour l'interface
         layout = QVBoxLayout()
 
-        # Affichage de l'IP du serveur Master
-        self.ip_master_label = QLabel(f"IP du serveur Master : {self.get_ip_master()}")
-        layout.addWidget(self.ip_master_label)
+        # Création du QTabWidget pour gérer les onglets
+        self.tab_widget = QTabWidget(self)
+        layout.addWidget(self.tab_widget)
 
-        # Affichage des routeurs connectés
+        # Onglet 1: Détails du serveur et logs
+        self.page_1 = QWidget()
+        self.page_1_layout = QVBoxLayout()
+
+        self.ip_master_label = QLabel(f"IP du serveur Master : {self.get_ip_master()}")
+        self.ip_master_port_label = QLabel(f"Port du serveur Master : 5001")
+        self.page_1_layout.addWidget(self.ip_master_label)
+        self.page_1_layout.addWidget(self.ip_master_port_label)
+
         self.text_routeurs_label = QLabel("Routeurs connectés :")
         self.text_routeurs = QTextEdit(self)
         self.text_routeurs.setReadOnly(True)
-        layout.addWidget(self.text_routeurs_label)
-        layout.addWidget(self.text_routeurs)
+        self.page_1_layout.addWidget(self.text_routeurs_label)
+        self.page_1_layout.addWidget(self.text_routeurs)
 
-        # Affichage des logs
         self.text_logs_label = QLabel("Logs :")
         self.text_logs = QTextEdit(self)
         self.text_logs.setReadOnly(True)
-        layout.addWidget(self.text_logs_label)
-        layout.addWidget(self.text_logs)
+        self.page_1_layout.addWidget(self.text_logs_label)
+        self.page_1_layout.addWidget(self.text_logs)
 
-        # Bouton pour actualiser la liste des routeurs et logs
-        self.btn_refresh = QPushButton("Actualiser")
-        self.btn_refresh.clicked.connect(self.load_routeurs)
-        layout.addWidget(self.btn_refresh)
+        # Bouton pour passer à l'onglet de gestion des clients et routeurs
+        self.btn_goto_page_2 = QPushButton("Gestion des clients et routeurs", self)
+        self.btn_goto_page_2.clicked.connect(self.goto_page_2)
+        self.page_1_layout.addWidget(self.btn_goto_page_2)
 
-        # Définir le layout principal
-        self.setLayout(layout)
+        self.page_1.setLayout(self.page_1_layout)
 
-        # Récupérer les routeurs depuis la base de données
+        # Onglet 2: Gestion des clients et routeurs
+        self.page_2 = QWidget()
+        self.page_2_layout = QVBoxLayout()
+
+        # Section pour ajouter un client
+        self.add_client_label = QLabel("Ajouter un client :")
+        self.client_name_input = QLineEdit(self)
+        self.add_client_button = QPushButton("Ajouter Client")
+        self.add_client_button.clicked.connect(self.add_client)
+
+        # Section pour ajouter un routeur
+        self.add_router_label = QLabel("Ajouter un routeur :")
+        self.router_name_input = QLineEdit(self)
+        self.add_router_button = QPushButton("Ajouter Routeur")
+        self.add_router_button.clicked.connect(self.add_router)
+
+        # Section pour supprimer un routeur
+        self.delete_router_label = QLabel("Supprimer un routeur :")
+        self.router_name_delete_input = QLineEdit(self)
+        self.delete_router_button = QPushButton("Supprimer Routeur")
+        self.delete_router_button.clicked.connect(self.delete_router)
+
+        # Section pour supprimer un client
+        self.delete_client_label = QLabel("Supprimer un client :")
+        self.client_name_delete_input = QLineEdit(self)
+        self.delete_client_button = QPushButton("Supprimer Client")
+        self.delete_client_button.clicked.connect(self.delete_client)
+
+        # Ajouter les champs et boutons de gestion des clients et routeurs
+        self.page_2_layout.addWidget(self.add_client_label)
+        self.page_2_layout.addWidget(self.client_name_input)
+        self.page_2_layout.addWidget(self.add_client_button)
+        self.page_2_layout.addWidget(self.add_router_label)
+        self.page_2_layout.addWidget(self.router_name_input)
+        self.page_2_layout.addWidget(self.add_router_button)
+        self.page_2_layout.addWidget(self.delete_router_label)
+        self.page_2_layout.addWidget(self.router_name_delete_input)
+        self.page_2_layout.addWidget(self.delete_router_button)
+        self.page_2_layout.addWidget(self.delete_client_label)
+        self.page_2_layout.addWidget(self.client_name_delete_input)
+        self.page_2_layout.addWidget(self.delete_client_button)
+
+        self.page_2.setLayout(self.page_2_layout)
+
+        # Ajouter les deux pages au QTabWidget (onglets)
+        self.tab_widget.addTab(self.page_1, "Serveur et Logs")
+        self.tab_widget.addTab(self.page_2, "Gestion Clients et Routeurs")
+
+        # Charger les routeurs depuis la base de données
         self.load_routeurs()
 
     def get_ip_master(self):
@@ -77,27 +131,96 @@ class InterfaceMaster(QWidget):
             self.text_logs.append("Routeurs actualisés.")
 
         except Exception as e:
-            self.text_logs.append(f"Erreur DB (routeurs) : {str(e)}")
+            self.text_logs.append(f"Erreur DB (routeurs) : {e}")
 
-    def load_logs(self):
-        """Charge et affiche les logs depuis la base de données"""
-        try:
-            # Récupérer les logs depuis la base de données
-            conn = mariadb.connect(
-                host=self.db_ip,  # Utilisation de l'IP de la base de données
-                user="toto",
-                password="toto",
-                database="table_routage"
-            )
-            cur = conn.cursor()
-            cur.execute("SELECT message_id, routeur, timestamp FROM logs ORDER BY timestamp DESC")
-            logs = cur.fetchall()
-            conn.close()
+    def add_client(self):
+        """Ajouter un client à la base de données"""
+        client_name = self.client_name_input.text()
+        if client_name:
+            try:
+                conn = mariadb.connect(
+                    host=self.db_ip,
+                    user="toto",
+                    password="toto",
+                    database="table_routage"
+                )
+                cur = conn.cursor()
+                cur.execute("INSERT INTO routeurs (nom, type) VALUES (%s, 'client')", (client_name,))
+                conn.commit()
+                conn.close()
+                self.text_logs.append(f"Client {client_name} ajouté.")
+                self.load_routeurs()  # Rafraîchir la liste des routeurs
+            except mariadb.Error as e:
+                self.text_logs.append(f"Erreur DB : {e}")
+        else:
+            self.text_logs.append("Nom du client vide.")
 
-            # Afficher les logs dans le QTextEdit
-            self.text_logs.clear()
-            for log in logs:
-                self.text_logs.append(f"{log[2]} - {log[1]} - {log[0]}")
+    def add_router(self):
+        """Ajouter un routeur à la base de données"""
+        router_name = self.router_name_input.text()
+        if router_name:
+            try:
+                conn = mariadb.connect(
+                    host=self.db_ip,
+                    user="toto",
+                    password="toto",
+                    database="table_routage"
+                )
+                cur = conn.cursor()
+                cur.execute("INSERT INTO routeurs (nom, type) VALUES (%s, 'routeur')", (router_name,))
+                conn.commit()
+                conn.close()
+                self.text_logs.append(f"Routeur {router_name} ajouté.")
+                self.load_routeurs()  # Rafraîchir la liste des routeurs
+            except mariadb.Error as e:
+                self.text_logs.append(f"Erreur DB : {e}")
+        else:
+            self.text_logs.append("Nom du routeur vide.")
 
-        except Exception as e:
-            self.text_logs.append(f"Erreur DB (logs) : {str(e)}")
+    def delete_router(self):
+        """Supprimer un routeur de la base de données"""
+        router_name = self.router_name_delete_input.text()
+        if router_name:
+            try:
+                conn = mariadb.connect(
+                    host=self.db_ip,
+                    user="toto",
+                    password="toto",
+                    database="table_routage"
+                )
+                cur = conn.cursor()
+                cur.execute("DELETE FROM routeurs WHERE nom = %s", (router_name,))
+                conn.commit()
+                conn.close()
+                self.text_logs.append(f"Routeur {router_name} supprimé.")
+                self.load_routeurs()  # Rafraîchir la liste des routeurs
+            except mariadb.Error as e:
+                self.text_logs.append(f"Erreur DB : {e}")
+        else:
+            self.text_logs.append("Nom du routeur vide.")
+
+    def delete_client(self):
+        """Supprimer un client de la base de données"""
+        client_name = self.client_name_delete_input.text()
+        if client_name:
+            try:
+                conn = mariadb.connect(
+                    host=self.db_ip,
+                    user="toto",
+                    password="toto",
+                    database="table_routage"
+                )
+                cur = conn.cursor()
+                cur.execute("DELETE FROM routeurs WHERE nom = %s AND type = 'client'", (client_name,))
+                conn.commit()
+                conn.close()
+                self.text_logs.append(f"Client {client_name} supprimé.")
+                self.load_routeurs()  # Rafraîchir la liste des routeurs
+            except mariadb.Error as e:
+                self.text_logs.append(f"Erreur DB : {e}")
+        else:
+            self.text_logs.append("Nom du client vide.")
+
+    def goto_page_2(self):
+        """Changer pour la page 2 (gestion des clients/routeurs)"""
+        self.tab_widget.setCurrentIndex(1)
