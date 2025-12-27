@@ -41,6 +41,11 @@ class InterfaceMaster(QWidget):
         self.page_1_layout.addWidget(self.text_logs_label)
         self.page_1_layout.addWidget(self.text_logs)
 
+        # Bouton pour actualiser les logs et les routeurs
+        self.btn_refresh = QPushButton("Actualiser", self)
+        self.btn_refresh.clicked.connect(self.load_routeurs)
+        self.page_1_layout.addWidget(self.btn_refresh)
+
         # Bouton pour passer à l'onglet de gestion des clients et routeurs
         self.btn_goto_page_2 = QPushButton("Gestion des clients et routeurs", self)
         self.btn_goto_page_2.clicked.connect(self.goto_page_2)
@@ -98,6 +103,9 @@ class InterfaceMaster(QWidget):
 
         # Charger les routeurs depuis la base de données
         self.load_routeurs()
+
+        # Rendre l'interface responsive au redimensionnement
+        self.setLayout(layout)
 
     def get_ip_master(self):
         """Retourne l'IP locale de la machine"""

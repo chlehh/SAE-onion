@@ -18,7 +18,6 @@ def generer_cle():
 # Chiffrement du message avec la clé publique
 def chiffrer(message, public_key):
     """Chiffre un message avec la clé publique."""
-    # Convertir le message en entier, puis appliquer le chiffrement simple
     message_bytes = message.encode("utf-8")
     message_int = int.from_bytes(message_bytes, byteorder='big')
     return message_int * public_key
@@ -26,7 +25,6 @@ def chiffrer(message, public_key):
 # Déchiffrement du message avec la clé privée
 def dechiffrer(message_int, private_key):
     """Déchiffre un message avec la clé privée."""
-    # Appliquer l'inverse du chiffrement avec la clé privée
     decrypted_message_int = message_int // private_key
     message_bytes = decrypted_message_int.to_bytes((decrypted_message_int.bit_length() + 7) // 8, byteorder='big')
     return message_bytes.decode("utf-8")
@@ -65,45 +63,52 @@ def recup_routeurs_client(db_ip):
 
     except mariadb.Error as e:
         print(f"Erreur lors de la récupération des données de la DB : {e}")
+        sys.exit(1)
 
-def envoie_donne_db(nom, ip, port, type_objet, db_ip):
-    """Envoie les informations du routeur à la base de données du master."""
+def envoie_donne_db(nom, ip, port, type_objet, cle_publique, db_ip):
+    """Envoie les informations du routeur à la base de données du master avec la clé publique."""
     try:
         conn = mariadb.connect(
-            host=db_ip,
+            host=db_ip,  # IP de la base de données
             user="toto",
             password="toto",
             database="table_routage"
         )
         cur = conn.cursor()
+
+        # Enregistrement du routeur avec sa clé publique dans la base de données
         query = """
-        INSERT INTO routeurs (nom, adresse_ip, port, type)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO routeurs (nom, adresse_ip, port, cle_publique, type)
+        VALUES (%s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             adresse_ip = VALUES(adresse_ip),
             port = VALUES(port),
+            cle_publique = VALUES(cle_publique),
             type = VALUES(type)
         """
-        cur.execute(query, (nom, ip, port, type_objet))
+        cur.execute(query, (nom, ip, port, cle_publique, type_objet))
         conn.commit()
         conn.close()
         print(f"Données envoyées à la base de données pour {nom}.")
     except mariadb.Error as e:
         print(f"Erreur lors de l'envoi des données dans la DB : {e}")
+        sys.exit(1)
 
-def envoyer(ip, port, message):
-    """Envoie un message à un autre routeur ou client de manière asynchrone."""
+def envoyer(s, ip, port, message):
+    """Envoie un message à un autre routeur ou client de manière persistante."""
     try:
-        s = socket.socket()
         s.connect((ip, port))
         s.send(message.encode())
-        s.close()
+        # Garder la connexion ouverte pour envoyer plus de messages
+        print(f"Message envoyé à {ip}:{port}")
     except socket.error as e:
         print(f"Erreur lors de l'envoi du message à {ip}:{port}: {e}")
+        sys.exit(1)
 
 def traitement_message(nom, message):
     """Traite le message reçu et décide du prochain hop."""
     print(f"{nom} a reçu : {message}")
+
     try:
         parts = message.split("|", 1)
         next_hop = parts[0]  # Next hop (routeur ou client)
@@ -112,24 +117,65 @@ def traitement_message(nom, message):
         # Si le prochain hop est un routeur
         if next_hop in ROUTEURS:
             nip, nport, cle_publique, next_hop_bdd = ROUTEURS[next_hop]
-            envoyer(nip, nport, rest)
+            with socket.socket() as s:
+                envoyer(s, nip, nport, rest)
             print(f"{nom} → a transmis à {next_hop}")
 
         # Si le prochain hop est un client
         elif next_hop in CLIENTS:
             nip, nport, cle_publique, next_hop_bdd = CLIENTS[next_hop]
-            envoyer(nip, nport, rest)
+            with socket.socket() as s:
+                envoyer(s, nip, nport, rest)
             print(f"{nom} → message final envoyé au client !")
+
         else:
             print(f"{nom} : Next hop inconnu :", next_hop)
     except Exception as e:
         print(f"Erreur lors du traitement du message : {e}")
 
-def routeur(nom, port, db_ip):
+def traitement_reception(nom, ip, port):
+    """Écoute les messages reçus par le routeur et crée un thread pour chaque message."""
+    print(f"{nom} écoute sur {ip}:{port}")
+
+    s = socket.socket()
+    s.bind((ip, port))
+    s.listen(5)
+
+    while True:
+        conn, addr = s.accept()
+        message = conn.recv(1024).decode()
+        conn.close()
+
+        # Chaque message reçu crée un nouveau thread pour le traiter
+        threading.Thread(target=traitement_message, args=(nom, message)).start()
+
+def base_de_donne(nom, port, cle_publique, db_ip):
+    """Envoie les informations du routeur à la base de données."""
+    ip_locale = get_ip()
+    envoie_donne_db(nom, ip_locale, port, "routeur", cle_publique, db_ip)
+    recup_routeurs_client(db_ip)
+
+def routeur(nom, port, ip_master):
     """Fonction principale du routeur"""
-    enregistrer_routeur(nom, port, db_ip)
-    t = threading.Thread(target=traitement_message, args=(nom, "0.0.0.0", port))
-    t.start()
+    # Connexion au master pour récupérer l'IP de la base de données
+    try:
+        s = socket.socket()
+        s.connect((ip_master, 5001))  # Connexion au serveur master sur le port 5001
+        db_ip = s.recv(1024).decode()  # Récupération de l'IP de la base de données
+        s.close()
+
+        # Générer une clé publique et privée pour ce routeur
+        private_key, public_key = generer_cle()
+
+        # Enregistrement du routeur avec sa clé publique dans la base de données
+        base_de_donne(nom, port, public_key, db_ip)
+
+        # Démarrage du thread pour écouter les messages
+        t = threading.Thread(target=traitement_reception, args=(nom, "0.0.0.0", port))
+        t.start()
+    except socket.error as e:
+        print(f"Erreur de connexion au master : {e}")
+        sys.exit(1)
 
 def get_ip():
     """Retourne l'IP locale de la machine"""
@@ -139,20 +185,14 @@ def get_ip():
     s.close()
     return ip
 
-def enregistrer_routeur(nom, port, db_ip):
-    """Enregistrer le routeur dans la base de données"""
-    ip_locale = get_ip()
-    envoie_donne_db(nom, ip_locale, port, "routeur", db_ip)
-    recup_routeurs_client(db_ip)
-
 if __name__ == "__main__":
     # Vérification des arguments
     if len(sys.argv) != 4:
-        print("Utilisation : python3 routeur.py <NOM_ROUTEUR> <PORT> <DB_IP>")
+        print("Utilisation : python3 routeur.py <NOM_ROUTEUR> <PORT> <MASTER_IP>")
         sys.exit(1)
 
     nom_routeur = sys.argv[1]  # Nom du routeur
     port_routeur = int(sys.argv[2])  # Port du routeur
-    db_ip = sys.argv[3]  # IP de la base de données
+    ip_master = sys.argv[3]  # IP du serveur Master
 
-    routeur(nom_routeur, port_routeur, db_ip)
+    routeur(nom_routeur, port_routeur, ip_master)

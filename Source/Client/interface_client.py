@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QTextEdit
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton
 import socket
 import mariadb
 
@@ -59,7 +59,7 @@ class InterfaceClient(QWidget):
     def load_clients_and_routeurs(self):
         """Récupérer la liste des clients et des routeurs depuis la base de données"""
         try:
-            # Récupérer l'IP de la base de données du serveur master
+            # Connexion au serveur master pour récupérer l'IP de la base de données
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((self.ip_master, self.port_master))
             s.sendall("GET_DB_IP".encode())  # Demander l'IP de la base de données
@@ -77,7 +77,7 @@ class InterfaceClient(QWidget):
             cur.execute("SELECT nom FROM routeurs WHERE type='client'")
             clients = cur.fetchall()
 
-            # Récupérer les routeurs
+            # Récupérer les routeurs disponibles
             cur.execute("SELECT nom FROM routeurs WHERE type='routeur'")
             routeurs = cur.fetchall()
             conn.close()
@@ -88,11 +88,10 @@ class InterfaceClient(QWidget):
             for c in clients:
                 self.text_clients.addItem(c[0])
 
-            # Changer l'état de la connexion
             self.connexion_state_label.setText("État de la connexion au serveur master : Connecté")
 
         except mariadb.Error as e:
-            print(f"Erreur DB (clients) : {str(e)}")
+            print(f"Erreur DB (clients/routeurs) : {str(e)}")
             self.connexion_state_label.setText("État de la connexion au serveur master : Erreur de connexion")
 
     def on_send(self):
