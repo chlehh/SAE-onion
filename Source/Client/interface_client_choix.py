@@ -165,9 +165,12 @@ class InterfaceClientChoix(QWidget):
         if manual_ip:
             dest_client = manual_ip
 
-        # Récupérer le nombre de sauts
+        # Vérifier le nombre de sauts
         try:
             nb_sauts = int(nb_sauts)
+            if nb_sauts <= 0:
+                self.messages_reçus_text.append("Erreur: Le nombre de sauts doit être un entier positif.")
+                return
         except ValueError:
             self.messages_reçus_text.append("Erreur: Le nombre de sauts doit être un entier.")
             return
@@ -190,3 +193,11 @@ class InterfaceClientChoix(QWidget):
     def reload_db(self):
         """Recharger la base de données pour récupérer les derniers routeurs et clients"""
         self.load_routeurs_and_clients()
+
+    def is_valid_ip(self, ip):
+        """Vérifier si l'IP est valide"""
+        try:
+            socket.inet_aton(ip)  # Utilise inet_aton pour valider l'IP
+            return True
+        except socket.error:
+            return False

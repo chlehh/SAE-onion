@@ -1,5 +1,5 @@
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QPushButton, QLineEdit, QTabWidget, QHBoxLayout, QFormLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QPushButton, QLineEdit, QTabWidget, QMessageBox, QFormLayout
 import socket
 import mariadb
 
@@ -138,96 +138,113 @@ class InterfaceMaster(QWidget):
             # Enregistrer un log indiquant que les routeurs ont été actualisés
             self.text_logs.append("Routeurs actualisés.")
 
-        except Exception as e:
+        except mariadb.Error as e:
             self.text_logs.append(f"Erreur DB (routeurs) : {e}")
 
     def add_client(self):
         """Ajouter un client à la base de données"""
         client_name = self.client_name_input.text()
-        if client_name:
-            try:
-                conn = mariadb.connect(
-                    host=self.db_ip,
-                    user="toto",
-                    password="toto",
-                    database="table_routage"
-                )
-                cur = conn.cursor()
-                cur.execute("INSERT INTO routeurs (nom, type) VALUES (%s, 'client')", (client_name,))
-                conn.commit()
-                conn.close()
-                self.text_logs.append(f"Client {client_name} ajouté.")
-                self.load_routeurs()  # Rafraîchir la liste des routeurs
-            except mariadb.Error as e:
-                self.text_logs.append(f"Erreur DB : {e}")
-        else:
-            self.text_logs.append("Nom du client vide.")
+        if not client_name:
+            self.text_logs.append("Erreur: Le nom du client est vide.")
+            return
+
+        try:
+            conn = mariadb.connect(
+                host=self.db_ip,
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("INSERT INTO routeurs (nom, type) VALUES (%s, 'client')", (client_name,))
+            conn.commit()
+            conn.close()
+            self.text_logs.append(f"Client {client_name} ajouté.")
+            self.load_routeurs()  # Rafraîchir la liste des routeurs
+        except mariadb.Error as e:
+            self.text_logs.append(f"Erreur DB : {e}")
 
     def add_router(self):
         """Ajouter un routeur à la base de données"""
         router_name = self.router_name_input.text()
-        if router_name:
-            try:
-                conn = mariadb.connect(
-                    host=self.db_ip,
-                    user="toto",
-                    password="toto",
-                    database="table_routage"
-                )
-                cur = conn.cursor()
-                cur.execute("INSERT INTO routeurs (nom, type) VALUES (%s, 'routeur')", (router_name,))
-                conn.commit()
-                conn.close()
-                self.text_logs.append(f"Routeur {router_name} ajouté.")
-                self.load_routeurs()  # Rafraîchir la liste des routeurs
-            except mariadb.Error as e:
-                self.text_logs.append(f"Erreur DB : {e}")
-        else:
-            self.text_logs.append("Nom du routeur vide.")
+        if not router_name:
+            self.text_logs.append("Erreur: Le nom du routeur est vide.")
+            return
+
+        try:
+            conn = mariadb.connect(
+                host=self.db_ip,
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("INSERT INTO routeurs (nom, type) VALUES (%s, 'routeur')", (router_name,))
+            conn.commit()
+            conn.close()
+            self.text_logs.append(f"Routeur {router_name} ajouté.")
+            self.load_routeurs()  # Rafraîchir la liste des routeurs
+        except mariadb.Error as e:
+            self.text_logs.append(f"Erreur DB : {e}")
 
     def delete_router(self):
         """Supprimer un routeur de la base de données"""
         router_name = self.router_name_delete_input.text()
-        if router_name:
-            try:
-                conn = mariadb.connect(
-                    host=self.db_ip,
-                    user="toto",
-                    password="toto",
-                    database="table_routage"
-                )
-                cur = conn.cursor()
-                cur.execute("DELETE FROM routeurs WHERE nom = %s", (router_name,))
-                conn.commit()
-                conn.close()
-                self.text_logs.append(f"Routeur {router_name} supprimé.")
-                self.load_routeurs()  # Rafraîchir la liste des routeurs
-            except mariadb.Error as e:
-                self.text_logs.append(f"Erreur DB : {e}")
-        else:
-            self.text_logs.append("Nom du routeur vide.")
+        if not router_name:
+            self.text_logs.append("Erreur: Le nom du routeur est vide.")
+            return
+
+        if not self.confirm_delete(router_name, "routeur"):
+            return
+
+        try:
+            conn = mariadb.connect(
+                host=self.db_ip,
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("DELETE FROM routeurs WHERE nom = %s", (router_name,))
+            conn.commit()
+            conn.close()
+            self.text_logs.append(f"Routeur {router_name} supprimé.")
+            self.load_routeurs()  # Rafraîchir la liste des routeurs
+        except mariadb.Error as e:
+            self.text_logs.append(f"Erreur DB : {e}")
 
     def delete_client(self):
         """Supprimer un client de la base de données"""
         client_name = self.client_name_delete_input.text()
-        if client_name:
-            try:
-                conn = mariadb.connect(
-                    host=self.db_ip,
-                    user="toto",
-                    password="toto",
-                    database="table_routage"
-                )
-                cur = conn.cursor()
-                cur.execute("DELETE FROM routeurs WHERE nom = %s AND type = 'client'", (client_name,))
-                conn.commit()
-                conn.close()
-                self.text_logs.append(f"Client {client_name} supprimé.")
-                self.load_routeurs()  # Rafraîchir la liste des routeurs
-            except mariadb.Error as e:
-                self.text_logs.append(f"Erreur DB : {e}")
-        else:
-            self.text_logs.append("Nom du client vide.")
+        if not client_name:
+            self.text_logs.append("Erreur: Le nom du client est vide.")
+            return
+
+        if not self.confirm_delete(client_name, "client"):
+            return
+
+        try:
+            conn = mariadb.connect(
+                host=self.db_ip,
+                user="toto",
+                password="toto",
+                database="table_routage"
+            )
+            cur = conn.cursor()
+            cur.execute("DELETE FROM routeurs WHERE nom = %s AND type = 'client'", (client_name,))
+            conn.commit()
+            conn.close()
+            self.text_logs.append(f"Client {client_name} supprimé.")
+            self.load_routeurs()  # Rafraîchir la liste des routeurs
+        except mariadb.Error as e:
+            self.text_logs.append(f"Erreur DB : {e}")
+
+    def confirm_delete(self, name, type_):
+        """Demander confirmation avant la suppression"""
+        reply = QMessageBox.question(self, "Confirmer la suppression",
+                                     f"Êtes-vous sûr de vouloir supprimer le {type_} {name} ?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        return reply == QMessageBox.StandardButton.Yes
 
     def goto_page_2(self):
         """Changer pour la page 2 (gestion des clients/routeurs)"""

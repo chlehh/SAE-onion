@@ -2,9 +2,24 @@ import socket
 import mariadb
 import sys
 import time
+import threading
 
 ROUTEURS = {}
 CLIENTS = {}
+
+def get_db_connection(db_ip):
+    """Retourne une connexion persistante à la base de données."""
+    try:
+        conn = mariadb.connect(
+            host=db_ip,
+            user="toto",
+            password="toto",
+            database="table_routage"
+        )
+        return conn
+    except mariadb.Error as e:
+        print(f"Erreur de connexion à la base de données : {e}")
+        sys.exit(1)
 
 def check_routeur_status(routeur_ip, routeur_port):
     """Vérifie si un routeur est toujours en ligne."""
@@ -23,12 +38,7 @@ def remove_inactive_routeur(routeur_nom, db_ip):
     """Supprime un routeur inactif de la base de données."""
     try:
         print(f"Tentative de suppression du routeur {routeur_nom} de la base de données...")
-        conn = mariadb.connect(
-            host=db_ip,
-            user="toto",
-            password="toto",
-            database="table_routage"
-        )
+        conn = get_db_connection(db_ip)
         cur = conn.cursor()
         cur.execute("DELETE FROM routeurs WHERE nom = %s", (routeur_nom,))
         conn.commit()
@@ -41,12 +51,7 @@ def remove_inactive_client(client_nom, db_ip):
     """Supprime un client inactif de la base de données."""
     try:
         print(f"Tentative de suppression du client {client_nom} de la base de données...")
-        conn = mariadb.connect(
-            host=db_ip,
-            user="toto",
-            password="toto",
-            database="table_routage"
-        )
+        conn = get_db_connection(db_ip)
         cur = conn.cursor()
         cur.execute("DELETE FROM routeurs WHERE nom = %s AND type = 'client'", (client_nom,))
         conn.commit()
@@ -58,12 +63,7 @@ def remove_inactive_client(client_nom, db_ip):
 def recup_routeurs(db_ip):
     """Récupère les informations des routeurs depuis la base de données"""
     try:
-        conn = mariadb.connect(
-            host=db_ip,
-            user="toto",
-            password="toto",
-            database="table_routage"
-        )
+        conn = get_db_connection(db_ip)
         cur = conn.cursor()
         cur.execute("SELECT nom, adresse_ip, port, cle_publique FROM routeurs WHERE type='routeur'")
         rows_routeurs = cur.fetchall()
@@ -82,12 +82,7 @@ def recup_routeurs(db_ip):
 def enregistrer_routeur(nom, ip, port, cle_publique, db_ip):
     """Enregistre un routeur dans la base de données"""
     try:
-        conn = mariadb.connect(
-            host=db_ip,
-            user="toto",
-            password="toto",
-            database="table_routage"
-        )
+        conn = get_db_connection(db_ip)
         cur = conn.cursor()
         cur.execute("INSERT INTO routeurs (nom, adresse_ip, port, cle_publique, type) VALUES (%s, %s, %s, %s, 'routeur')", 
                     (nom, ip, port, cle_publique))
@@ -102,12 +97,7 @@ def enregistrer_routeur(nom, ip, port, cle_publique, db_ip):
 def enregistrer_log(message_id, routeur, db_ip):
     """Enregistre les logs dans la base de données"""
     try:
-        conn = mariadb.connect(
-            host=db_ip,
-            user="toto",
-            password="toto",
-            database="table_routage"
-        )
+        conn = get_db_connection(db_ip)
         cur = conn.cursor()
         cur.execute("INSERT INTO logs (message_id, routeur) VALUES (%s, %s)", (message_id, routeur))
         conn.commit()
@@ -177,12 +167,7 @@ def monitor_routeurs(db_ip, interval=60):
     while True:
         try:
             print("Vérification des routeurs...")
-            conn = mariadb.connect(
-                host=db_ip,
-                user="toto",
-                password="toto",
-                database="table_routage"
-            )
+            conn = get_db_connection(db_ip)
             cur = conn.cursor()
             cur.execute("SELECT nom, adresse_ip, port FROM routeurs WHERE type = 'routeur'")
             routeurs = cur.fetchall()
@@ -215,4 +200,5 @@ if __name__ == "__main__":
     master_port = int(sys.argv[2])  # Port du serveur Master
 
     # Lancer le serveur master
+    threading.Thread(target=monitor_routeurs, args=(db_ip,)).start()  # Lancer la surveillance des routeurs dans un thread séparé
     master(db_ip, master_port)

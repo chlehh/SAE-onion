@@ -15,18 +15,28 @@ def generer_cle():
     public_key = private_key * random.getrandbits(256)  # Clé publique dérivée de la clé privée
     return private_key, public_key
 
-# Chiffrement du message avec la clé publique
-def chiffrer(message, public_key):
-    """Chiffre un message avec la clé publique."""
+# Chiffrement du message avec plusieurs couches (pour chaque routeur)
+def chiffrer(message, routeurs):
+    """Chiffre un message avec plusieurs couches, une pour chaque routeur."""
     message_bytes = message.encode("utf-8")
     message_int = int.from_bytes(message_bytes, byteorder='big')
-    return message_int * public_key
 
-# Déchiffrement du message avec la clé privée
-def dechiffrer(message_int, private_key):
-    """Déchiffre un message avec la clé privée."""
-    decrypted_message_int = message_int // private_key
-    message_bytes = decrypted_message_int.to_bytes((decrypted_message_int.bit_length() + 7) // 8, byteorder='big')
+    # Appliquer plusieurs couches de chiffrement, chaque routeur ayant sa propre clé publique
+    for routeur in routeurs:
+        public_key = routeur['cle_publique']
+        message_int = message_int * public_key  # Chiffrement avec la clé publique du routeur
+
+    return message_int
+
+# Déchiffrement du message avec plusieurs couches (pour chaque routeur)
+def dechiffrer(message_int, routeurs):
+    """Déchiffre un message avec plusieurs couches de déchiffrement."""
+    for routeur in reversed(routeurs):  # On commence par le dernier routeur
+        private_key = routeur['cle_privee']
+        message_int = message_int // private_key  # Déchiffrement avec la clé privée du routeur
+
+    # Convertir l'entier déchiffré en bytes et le décoder en texte
+    message_bytes = message_int.to_bytes((message_int.bit_length() + 7) // 8, byteorder='big')
     return message_bytes.decode("utf-8")
 
 def recup_routeurs_client(db_ip):
