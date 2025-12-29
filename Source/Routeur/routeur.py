@@ -1,103 +1,125 @@
+#!/usr/bin/env python3
+"""
+routeur.py
+Routeur pour le systeme de routage en oignon
+"""
+
 import socket
 import threading
-import random
 import sys
 import time
-from cryptographie import rsa_decrypt
-from cryptographie import generer_cle_rsa
+from cryptographie import generer_cles, dechiffrer, encoder_cle_pour_envoi
 
 class Routeur:
-    def __init__(self, nom, port, master_ip, master_port, pub_key, priv_key):
+    def __init__(self, nom, port, master_ip, master_port):
         self.nom = nom
         self.port = port
         self.master_ip = master_ip
         self.master_port = master_port
-        self.pub_key = pub_key  # La clé publique sous forme de tuple (e, n)
-        self.priv_key = priv_key  # La clé privée sous forme de tuple (d, n)
         
-        # Initialisation du socket d'écoute
+        # Generation des cles RSA
+        self.cle_privee, self.cle_publique = generer_cles()
+        
         self.server_socket = None
         self.running = True
         
-        print(f"Routeur {self.nom} initialisé")
-        print(f"   Port d'écoute : {self.port}")
-        print(f"   Clé publique : {self.pub_key}")
-        print(f"   Clé privée : {self.priv_key}")
+        print(f"Routeur {self.nom} initialise")
+        print(f"   Port: {self.port}")
+        print(f"   Cle publique: {self.cle_publique}")
+        print(f"   Cle privee: (confidentielle)")
+    
 
     def enregistrer_aupres_master(self):
-        """Enregistre le routeur auprès du serveur Master."""
+        """S'enregistre aupres du Master avec sa cle publique."""
         try:
-            print(f"Connexion au Master ({self.master_ip}:{self.master_port})...")
-
-            # Créer un socket pour se connecter au Master
+            print(f"\nConnexion au Master ({self.master_ip}:{self.master_port})...")
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((self.master_ip, self.master_port))
             
-            # Créer le message d'enregistrement
-            message = f"Routeur {self.nom} {self.port} {self.pub_key}"
+            # ✅ CORRECTION : Encoder CORRECTEMENT la clé publique
+            cle_encodee = encoder_cle_pour_envoi(self.cle_publique)
+            print(f"[DEBUG] Clé encodée envoyée au Master : '{cle_encodee}'")  # 🔍 LOG
+            
+            message = f"Routeur {self.nom} {self.port} {cle_encodee}"
             s.send(message.encode())
             
-            # Réception de la réponse du Master
             reponse = s.recv(1024).decode()
             s.close()
             
-            # Vérification de la réponse du Master
             if reponse.startswith("OK"):
-                print(f"Routeur {self.nom} enregistré auprès du Master")
+                print(f"Routeur {self.nom} enregistre")
+                print(f"[DEBUG] Clé stockée : {cle_encodee}")  # 🔍 LOG
                 return True
             else:
-                print(f"Erreur lors de l'enregistrement : {reponse}")
+                print(f"Erreur: {reponse}")
                 return False
+                
         except socket.error as e:
-            print(f"Erreur de connexion au Master : {e}")
+            print(f"Erreur connexion: {e}")
             return False
-
+    
     def dechiffrer_couche(self, message_chiffre):
-        """Déchiffre UNE couche du message avec la clé privée du routeur."""
+        """
+        Dechiffre UNE couche avec RSA.
+        Format: "next_hop|message_chiffre_RSA"
+        ANONYMISATION: Ne voit que le next_hop
+        """
         try:
-            print(f"Message brut reçu : {message_chiffre}")
-        
-            # Séparer le message en différentes parties : chaque nombre séparé par des virgules
-            parties_chiffrees = message_chiffre.split(",")
-        
-            # Afficher les parties séparées
-            print(f"Parties séparées : {parties_chiffrees}")
-        
-            # Déchiffrement de chaque partie (intégrer la clé privée pour déchiffrer)
-            message_dechiffre = ""
-            for partie in parties_chiffrees:
-                try:
-                    chiffre = int(partie)  # Convertir chaque partie en entier
-                    # Déchiffrement avec la clé privée (d, n)
-                    octet_dechiffre = pow(chiffre, self.priv_key[0], self.priv_key[1])
-                    message_dechiffre += chr(octet_dechiffre)  # Convertir l'entier déchiffré en caractère et l'ajouter
-                except ValueError as e:
-                    print(f"Erreur de conversion de la partie chiffrée '{partie}': {e}")
-                    continue
-
-            print(f"Message déchiffré : {message_dechiffre}")
+            # Separer next_hop et contenu chiffre
+            if "|" not in message_chiffre:
+                # Message final simple
+                if ":" in message_chiffre:
+                    parties = message_chiffre.split(":", 1)
+                    return parties[0], parties[1] if len(parties) > 1 else ""
+                return "", message_chiffre
             
-            # Séparer le prochain hop (Routeur1) et le message final
-            if ":" in message_dechiffre:
-                next_hop, message_final = message_dechiffre.split(":", 1)
-                print(f"Next hop déchiffré : {next_hop}")
-                print(f"Message final déchiffré : {message_final}")
-                return next_hop, message_final
-            else:
-                print(f"Message final (sans prochain hop) : {message_dechiffre}")
-                return "", message_dechiffre
-
+            parties = message_chiffre.split("|", 1)
+            next_hop = parties[0]
+            contenu_chiffre = parties[1]
+            
+            # Dechiffrer avec RSA
+            contenu_dechiffre = dechiffrer(contenu_chiffre, self.cle_privee)
+            
+            if contenu_dechiffre is None:
+                return None, None
+            
+            return next_hop, contenu_dechiffre
+        
         except Exception as e:
-            print(f"Erreur lors du déchiffrement : {e}")
+            print(f"Erreur dechiffrement: {e}")
+            import traceback
+            traceback.print_exc()
             return None, None
-
+    
+    def recuperer_infos_depuis_master(self, nom_entite):
+        """
+        Recupere UNIQUEMENT l'info du prochain saut.
+        ANONYMISATION: Le routeur ne demande que le next_hop
+        """
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((self.master_ip, self.master_port))
+            
+            s.send(f"GET_INFO:{nom_entite}".encode())
+            reponse = s.recv(8192).decode()
+            s.close()
+            
+            if reponse.startswith("ERROR"):
+                return None
+            
+            return reponse
+            
+        except Exception as e:
+            print(f"Erreur recuperation: {e}")
+            return None
+    
     def transmettre_message(self, next_hop, message):
-        """Transmet le message au prochain routeur ou client."""
+        """Transmet au prochain saut UNIQUEMENT."""
         try:
             infos = self.recuperer_infos_depuis_master(next_hop)
             
             if not infos:
-                print(f"Impossible de trouver {next_hop}")
+                print(f"Next hop {next_hop} introuvable")
                 return False
             
             ip, port = infos.split(":")
@@ -107,69 +129,109 @@ class Routeur:
             
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((ip, port))
-            s.send(message.encode())
+            s.send(message.encode() if isinstance(message, str) else message)
             s.close()
             
-            print(f"Message transmis à {next_hop}")
+            print(f"Message transmis")
             return True
+            
         except socket.error as e:
-            print(f"Erreur lors de la transmission à {next_hop} : {e}")
+            print(f"Erreur transmission: {e}")
             return False
     
-    def recuperer_infos_depuis_master(self, nom_entite):
-        """Récupère les informations d'un routeur ou client depuis le Master."""
+    def log_message(self, message_id):
+        """Log anonyme."""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
             s.connect((self.master_ip, self.master_port))
-            s.send(f"GET_INFO:{nom_entite}".encode())
-            reponse = s.recv(8192).decode()
+            
+            log_msg = f"LOG {message_id} {self.nom}"
+            s.send(log_msg.encode())
+            s.recv(1024)
             s.close()
-            
-            if reponse.startswith("ERROR"):
-                return None
-            
-            return reponse.split(":")
-        except Exception as e:
-            print(f"Erreur lors de la récupération des infos : {e}")
-            return None
+        except:
+            pass
     
     def traiter_message(self, message_recu, addr):
-        """Traite un message reçu."""
-        print(f"\nMessage reçu de {addr}")
+        """
+        Traite un message avec RSA.
+        ANONYMISATION: Ne connait que le next_hop
+        """
+        print(f"\n{'='*60}")
+        print(f"[{self.nom}] Message recu")
+        print(f"{'='*60}")
         
-        next_hop, reste = self.dechiffrer_couche(message_recu)
+        try:
+            # Dechiffrer UNE couche RSA
+            next_hop, reste = self.dechiffrer_couche(message_recu)
+            
+            if next_hop is None:
+                print(f"[{self.nom}] Echec dechiffrement RSA")
+                return
+            
+            print(f"[{self.nom}] Couche RSA dechiffree")
+            print(f"[{self.nom}] Prochain saut: {next_hop}")
+            print(f"[{self.nom}] Anonymisation: Je ne vois QUE le next_hop")
+            
+            # Log anonyme
+            self.log_message(f"msg_{hash(message_recu) % 10000}")
+            
+            # Transmettre
+            if next_hop and next_hop.strip():
+                self.transmettre_message(next_hop, reste)
+            else:
+                print(f"[{self.nom}] Message final atteint")
         
-        if next_hop is None:
-            print("Impossible de déchiffrer le message")
-            return
-        
-        print(f"Next hop déchiffré : {next_hop}")
-        self.transmettre_message(next_hop, reste)
+        except Exception as e:
+            print(f"[{self.nom}] Erreur: {e}")
+            import traceback
+            traceback.print_exc()
     
     def ecouter(self):
-        """Écoute les messages entrants."""
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.bind(("0.0.0.0", self.port))
-        self.server_socket.listen(5)
-        
-        print(f"Routeur {self.nom} en écoute sur 0.0.0.0:{self.port}")
-        
-        while self.running:
-            conn, addr = self.server_socket.accept()
-            message = conn.recv(8192).decode()
-            conn.close()
+        """Ecoute les messages."""
+        try:
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_socket.bind(("0.0.0.0", self.port))
+            self.server_socket.listen(5)
             
-            if message:
-                self.traiter_message(message, addr)
+            print(f"\n{self.nom} en ecoute sur 0.0.0.0:{self.port}")
+            print("En attente...\n")
+            
+            while self.running:
+                try:
+                    conn, addr = self.server_socket.accept()
+                    message = conn.recv(8192).decode()
+                    conn.close()
+                    
+                    if message:
+                        thread = threading.Thread(
+                            target=self.traiter_message,
+                            args=(message, addr),
+                            daemon=True
+                        )
+                        thread.start()
+                
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    if self.running:
+                        print(f"Erreur: {e}")
+                    
+        except Exception as e:
+            print(f"Erreur demarrage: {e}")
+        finally:
+            if self.server_socket:
+                self.server_socket.close()
     
     def demarrer(self):
-        """Démarre le routeur."""
+        """Demarre le routeur."""
         print("\n" + "="*60)
-        print(f"DÉMARRAGE DU ROUTEUR {self.nom}")
+        print(f"DEMARRAGE ROUTEUR {self.nom}")
         print("="*60)
         
         if not self.enregistrer_aupres_master():
-            print("Impossible de s'enregistrer auprès du Master")
             sys.exit(1)
         
         time.sleep(1)
@@ -177,19 +239,13 @@ class Routeur:
         try:
             self.ecouter()
         except KeyboardInterrupt:
-            print(f"\nArrêt du routeur {self.nom}...")
+            print(f"\nArret {self.nom}...")
             self.running = False
-    
-    def arreter(self):
-        """Arrête le routeur.""" 
-        self.running = False
-        if self.server_socket:
-            self.server_socket.close()
+
 
 def main():
     if len(sys.argv) != 5:
-        print("Usage incorrect!")
-        print("Usage : python routeur.py <NOM> <PORT> <MASTER_IP> <MASTER_PORT>")
+        print("Usage: python routeur.py <NOM> <PORT> <MASTER_IP> <MASTER_PORT>")
         sys.exit(1)
     
     nom = sys.argv[1]
@@ -197,19 +253,9 @@ def main():
     master_ip = sys.argv[3]
     master_port = int(sys.argv[4])
     
-    # Générer les clés publiques et privées pour le chiffrement RSA
-    pub_key, priv_key = generer_cle_rsa()
-    
-    # Initialiser le routeur avec les clés
-    routeur = Routeur(nom, port, master_ip, master_port, pub_key, priv_key)
-    
-    # Démarrer le serveur du routeur
-    if routeur.demarrer():
-        print(f"{nom} enregistré auprès du Master")
-        print(f"{nom} en écoute sur {master_ip}:{master_port}")
-        routeur.attendre_connexions()
-    else:
-        print(f"Erreur lors de l'enregistrement du {nom} auprès du Master")
+    routeur = Routeur(nom, port, master_ip, master_port)
+    routeur.demarrer()
+
 
 if __name__ == "__main__":
     main()
