@@ -15,7 +15,7 @@ def run_master_gui(db_ip, master_port):
     """Fonction pour lancer l'interface graphique et le serveur master en parallèle"""
     
     # Tester la connexion à la base de données AVANT de tout lancer
-    print(" Test de connexion à la base de données...")
+    print("🔌 Test de connexion à la base de données...")
     test_conn = get_db_connection(db_ip)
     if test_conn:
         print(" Connexion à la base de données réussie\n")
@@ -43,7 +43,7 @@ def run_master_gui(db_ip, master_port):
     print(" Serveur master démarré\n")
     
     # Démarrer la surveillance des routeurs dans un thread séparé
-    print(" Démarrage de la surveillance des routeurs...")
+    print("🔍 Démarrage de la surveillance des routeurs...")
     monitor_thread = threading.Thread(
         target=monitor_routeurs, 
         args=(db_ip, 60), 

@@ -1,7 +1,12 @@
+#!/usr/bin/env python3
+"""
+client.py
+Point d'entrée pour lancer le client avec son interface graphique
+"""
+
 import sys
 from PyQt6.QtWidgets import QApplication
 from interface_client import InterfaceClient
-from cryptographie import generer_cle_rsa
 
 def main():
     if len(sys.argv) != 5:
@@ -18,17 +23,15 @@ def main():
     print("="*60)
     print(f"LANCEMENT DU CLIENT {nom}")
     print("="*60)
-    print(f"Port d'écoute : {port}")
+    print(f"Port d'ecoute : {port}")
     print(f"Master : {master_ip}:{master_port}")
     print("="*60 + "\n")
     
-    # Générer les clés publiques et privées pour le chiffrement RSA
-    pub_key, priv_key = generer_cle_rsa()
-    
     app = QApplication(sys.argv)
-    window = InterfaceClient(nom, port, master_ip, master_port, pub_key, priv_key)
+    window = InterfaceClient(nom, port, master_ip, master_port)
     window.show()
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()

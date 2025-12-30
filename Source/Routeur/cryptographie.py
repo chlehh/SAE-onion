@@ -13,7 +13,7 @@ def pgcd(a, b):
     return a
 
 def est_premier_simple(n):
-    """Test de primalite simple et rapide."""
+    """Test de primalite """
     if n < 2:
         return False
     if n == 2 or n == 3:

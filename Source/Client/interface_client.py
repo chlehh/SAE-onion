@@ -10,13 +10,13 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QComboBox, QSpinBox, QGroupBox, QMessageBox,
                              QCheckBox, QRadioButton, QButtonGroup, QScrollArea)
 from PyQt6.QtCore import QTimer
-from Client.client import Client
+from client_core import Client
 
 class InterfaceClient(QMainWindow):
-    def __init__(self, nom, port, master_ip, master_port, pub_key, priv_key):
+    def __init__(self, nom, port, master_ip, master_port):
         super().__init__()
         
-        self.client = Client(nom, port, master_ip, master_port, pub_key, priv_key)
+        self.client = Client(nom, port, master_ip, master_port)
         self.routeur_checkboxes = {}  # Dictionnaire pour stocker les checkboxes des routeurs
         
         self.setWindowTitle(f"Client {nom}")
@@ -33,13 +33,13 @@ class InterfaceClient(QMainWindow):
         self.timer.timeout.connect(self.rafraichir_routeurs)
         self.timer.start(10000)  # Toutes les 10 secondes
         
-        # Démarrer le client
+        # Demarrer le client
         if self.client.demarrer():
-            self.changer_statut("Enregistré auprès du Master")
-            # Rafraîchir immédiatement après le démarrage
+            self.changer_statut("Enregistre aupres du Master")
+            # Rafraichir immediatement apres le demarrage
             self.rafraichir_routeurs()
         else:
-            self.changer_statut("Erreur de démarrage")
+            self.changer_statut("Erreur de demarrage")
     
     def init_ui(self):
         """Initialise l'interface utilisateur."""
@@ -49,7 +49,7 @@ class InterfaceClient(QMainWindow):
         main_layout = QVBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # En-tête
+        # En-tete
         header = QLabel(f"Client {self.client.nom}")
         header.setStyleSheet("font-size: 18px; font-weight: bold; padding: 10px;")
         main_layout.addWidget(header)
@@ -77,8 +77,8 @@ class InterfaceClient(QMainWindow):
         group_envoi = QGroupBox("Envoyer un message")
         layout_envoi = QVBoxLayout()
         
-        # Mode de sélection du destinataire
-        self.radio_client = QRadioButton("Sélectionner un client")
+        # Mode de selection du destinataire
+        self.radio_client = QRadioButton("Selectionner un client")
         self.radio_ip = QRadioButton("Saisir IP et Port")
         self.radio_client.setChecked(True)
         self.radio_client.toggled.connect(self.toggle_mode_destinataire)
@@ -86,7 +86,7 @@ class InterfaceClient(QMainWindow):
         layout_envoi.addWidget(self.radio_client)
         layout_envoi.addWidget(self.radio_ip)
         
-        # Sélection client
+        # Selection client
         self.widget_client = QWidget()
         layout_client = QHBoxLayout()
         layout_client.setContentsMargins(0, 0, 0, 0)
@@ -146,7 +146,7 @@ class InterfaceClient(QMainWindow):
         self.btn_envoyer.setStyleSheet("background-color: #4CAF50; color: white; padding: 8px; font-weight: bold;")
         layout_boutons.addWidget(self.btn_envoyer)
         
-        self.btn_rafraichir = QPushButton("Rafraîchir")
+        self.btn_rafraichir = QPushButton("Rafraichir")
         self.btn_rafraichir.clicked.connect(self.rafraichir_routeurs)
         layout_boutons.addWidget(self.btn_rafraichir)
         layout_envoi.addLayout(layout_boutons)
@@ -154,8 +154,8 @@ class InterfaceClient(QMainWindow):
         group_envoi.setLayout(layout_envoi)
         left_layout.addWidget(group_envoi)
         
-        # Groupe: Messages reçus
-        group_messages = QGroupBox("Messages reçus")
+        # Groupe: Messages recus
+        group_messages = QGroupBox("Messages recus")
         layout_messages = QVBoxLayout()
         
         self.text_messages = QTextEdit()
@@ -180,7 +180,7 @@ class InterfaceClient(QMainWindow):
         layout_routeurs = QVBoxLayout()
         
         # Label info
-        info_routeurs = QLabel("Sélectionner les routeurs à utiliser:")
+        info_routeurs = QLabel("Selectionner les routeurs a utiliser:")
         info_routeurs.setStyleSheet("font-style: italic; color: #666;")
         layout_routeurs.addWidget(info_routeurs)
         
@@ -194,13 +194,13 @@ class InterfaceClient(QMainWindow):
         scroll.setWidget(scroll_content)
         layout_routeurs.addWidget(scroll)
         
-        # Boutons pour tout sélectionner/désélectionner
+        # Boutons pour tout selectionner/deselectionner
         layout_select_buttons = QHBoxLayout()
-        btn_select_all = QPushButton("Tout sélectionner")
+        btn_select_all = QPushButton("Tout selectionner")
         btn_select_all.clicked.connect(self.selectionner_tous_routeurs)
         layout_select_buttons.addWidget(btn_select_all)
         
-        btn_deselect_all = QPushButton("Tout désélectionner")
+        btn_deselect_all = QPushButton("Tout deselectionner")
         btn_deselect_all.clicked.connect(self.deselectionner_tous_routeurs)
         layout_select_buttons.addWidget(btn_deselect_all)
         layout_routeurs.addLayout(layout_select_buttons)
@@ -225,17 +225,17 @@ class InterfaceClient(QMainWindow):
             self.widget_ip.setVisible(True)
     
     def rafraichir_routeurs(self):
-        """Rafraîchit la liste des routeurs et clients."""
+        """Rafraichit la liste des routeurs et clients."""
         self.client.recuperer_routeurs()
         
-        # Mettre à jour le combo box des clients
+        # Mettre a jour le combo box des clients
         self.combo_destinataire.clear()
         for nom in self.client.clients_disponibles.keys():
             if nom != self.client.nom:
                 self.combo_destinataire.addItem(nom)
         
-        # Mettre à jour la liste des routeurs avec checkboxes
-        # Sauvegarder l'état actuel des sélections
+        # Mettre a jour la liste des routeurs avec checkboxes
+        # Sauvegarder l'etat actuel des selections
         selections_actuelles = {}
         for nom, checkbox in self.routeur_checkboxes.items():
             selections_actuelles[nom] = checkbox.isChecked()
@@ -256,7 +256,7 @@ class InterfaceClient(QMainWindow):
         else:
             for nom, info in self.client.routeurs_disponibles.items():
                 checkbox = QCheckBox(f"{nom} ({info['ip']}:{info['port']})")
-                # Restaurer la sélection précédente si elle existait
+                # Restaurer la selection precedente si elle existait
                 if nom in selections_actuelles:
                     checkbox.setChecked(selections_actuelles[nom])
                 self.routeur_checkboxes[nom] = checkbox
@@ -265,17 +265,17 @@ class InterfaceClient(QMainWindow):
         self.routeurs_layout.addStretch()
     
     def selectionner_tous_routeurs(self):
-        """Sélectionne tous les routeurs."""
+        """Selectionne tous les routeurs."""
         for checkbox in self.routeur_checkboxes.values():
             checkbox.setChecked(True)
     
     def deselectionner_tous_routeurs(self):
-        """Désélectionne tous les routeurs."""
+        """Deselectionne tous les routeurs."""
         for checkbox in self.routeur_checkboxes.values():
             checkbox.setChecked(False)
     
     def get_routeurs_selectionnes(self):
-        """Retourne la liste des noms des routeurs sélectionnés."""
+        """Retourne la liste des noms des routeurs selectionnes."""
         return [nom for nom, checkbox in self.routeur_checkboxes.items() if checkbox.isChecked()]
     
     def envoyer_message(self):
@@ -283,11 +283,11 @@ class InterfaceClient(QMainWindow):
         message = self.text_message.text()
         nb_sauts = self.spin_sauts.value()
         
-        # Déterminer le destinataire
+        # Determiner le destinataire
         if self.radio_client.isChecked():
             destinataire = self.combo_destinataire.currentText()
             if not destinataire:
-                QMessageBox.warning(self, "Erreur", "Veuillez sélectionner un destinataire")
+                QMessageBox.warning(self, "Erreur", "Veuillez selectionner un destinataire")
                 return
         else:
             ip = self.input_ip.text().strip()
@@ -299,23 +299,23 @@ class InterfaceClient(QMainWindow):
                 port_int = int(port)
                 destinataire = f"{ip}:{port_int}"
             except ValueError:
-                QMessageBox.warning(self, "Erreur", "Le port doit être un nombre")
+                QMessageBox.warning(self, "Erreur", "Le port doit etre un nombre")
                 return
         
         if not message:
             QMessageBox.warning(self, "Erreur", "Veuillez entrer un message")
             return
         
-        # Vérifier les routeurs sélectionnés
+        # Verifier les routeurs selectionnes
         routeurs_selectionnes = self.get_routeurs_selectionnes()
         
         if routeurs_selectionnes:
-            # Utiliser les routeurs sélectionnés
+            # Utiliser les routeurs selectionnes
             if len(routeurs_selectionnes) < nb_sauts:
                 QMessageBox.warning(self, "Erreur", 
-                                  f"Pas assez de routeurs sélectionnés\n({len(routeurs_selectionnes)} sélectionnés < {nb_sauts} sauts)")
+                                  f"Pas assez de routeurs selectionnes\n({len(routeurs_selectionnes)} selectionnes < {nb_sauts} sauts)")
                 return
-            # Envoyer avec les routeurs sélectionnés
+            # Envoyer avec les routeurs selectionnes
             thread = threading.Thread(
                 target=self.client.envoyer_message_avec_routeurs,
                 args=(destinataire, message, routeurs_selectionnes[:nb_sauts]),
@@ -345,9 +345,9 @@ class InterfaceClient(QMainWindow):
         self.text_messages.append(f"[{timestamp}] {message}")
     
     def changer_statut(self, statut):
-        """Change le statut affiché."""
+        """Change le statut affiche."""
         self.label_statut.setText(statut)
-        if "Enregistré" in statut or "connecté" in statut:
+        if "Enregistre" in statut or "connecte" in statut:
             self.label_statut.setStyleSheet("padding: 5px; background-color: #d4edda; border-radius: 3px;")
         elif "Erreur" in statut:
             self.label_statut.setStyleSheet("padding: 5px; background-color: #f8d7da; border-radius: 3px;")
@@ -355,7 +355,7 @@ class InterfaceClient(QMainWindow):
             self.label_statut.setStyleSheet("padding: 5px; background-color: #fff3cd; border-radius: 3px;")
     
     def closeEvent(self, event):
-        """Fermeture de la fenêtre."""
+        """Fermeture de la fenetre."""
         reply = QMessageBox.question(
             self,
             'Confirmation',

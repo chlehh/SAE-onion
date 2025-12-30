@@ -36,9 +36,9 @@ class Routeur:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((self.master_ip, self.master_port))
             
-            # ✅ CORRECTION : Encoder CORRECTEMENT la clé publique
+            
             cle_encodee = encoder_cle_pour_envoi(self.cle_publique)
-            print(f"[DEBUG] Clé encodée envoyée au Master : '{cle_encodee}'")  # 🔍 LOG
+            print(f"[DEBUG] Clé encodée envoyée au Master : '{cle_encodee}'")  # LOG
             
             message = f"Routeur {self.nom} {self.port} {cle_encodee}"
             s.send(message.encode())
@@ -48,7 +48,7 @@ class Routeur:
             
             if reponse.startswith("OK"):
                 print(f"Routeur {self.nom} enregistre")
-                print(f"[DEBUG] Clé stockée : {cle_encodee}")  # 🔍 LOG
+                print(f"[DEBUG] Clé stockée : {cle_encodee}")  # LOG
                 return True
             else:
                 print(f"Erreur: {reponse}")
