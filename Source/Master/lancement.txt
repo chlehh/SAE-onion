@@ -1,1 +1,1 @@
-python main.py 192.168.1.10 6000
+python main.py <MASTER_IP> <MASTER_PORT>

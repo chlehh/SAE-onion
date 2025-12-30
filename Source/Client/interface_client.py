@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QComboBox, QSpinBox, QGroupBox, QMessageBox,
                              QCheckBox, QRadioButton, QButtonGroup, QScrollArea)
 from PyQt6.QtCore import QTimer
-from client_core import Client
+from client import Client
 
 class InterfaceClient(QMainWindow):
     def __init__(self, nom, port, master_ip, master_port):

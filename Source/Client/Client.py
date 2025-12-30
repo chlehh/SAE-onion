@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-client_core.py
+client.py
 Logique metier du client pour le systeme de routage en oignon
 """
 

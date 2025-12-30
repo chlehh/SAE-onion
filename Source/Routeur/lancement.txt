@@ -1,1 +1,1 @@
-python routeur.py -m <MASTER_IP>:<MASTER_PORT> -p <ROUTEUR_PORT>
+python routeur.py <NOM_ROUTEUR> <ROUTEUR_PORT> <MASTER_IP> <MASTER_PORT>

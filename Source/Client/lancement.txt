@@ -1,2 +1,2 @@
-python3 client.py CLIENT1 5000 172.20.10.10 192.168.1.100 6000
-				ip base de donne ip port 
+python client.py <NOM_CLIENT> <PORT_CLIENT> <MASTER_IP> <MASTER_PORT>
+				
