@@ -17,7 +17,7 @@ class Routeur:
         self.cle_privee, self.cle_publique = generer_cles()
         self.running = True
         
-        print(f"✓ Routeur {nom} initialisé (port {port})")
+        print(f" Routeur {nom} initialisé (port {port})")
     
     def enregistrer_aupres_master(self):
         """S'enregistre au Master"""
@@ -33,7 +33,7 @@ class Routeur:
             s.close()
             
             if reponse.startswith("OK"):
-                print(f"✓ Enregistré auprès du Master")
+                print(f" Enregistré auprès du Master")
                 return True
             return False
         except:
@@ -92,15 +92,15 @@ class Routeur:
         next_hop, reste = self.dechiffrer_couche(message_recu)
         
         if next_hop is None:
-            print("✗ Échec déchiffrement")
+            print(" Échec déchiffrement")
             return
         
-        print(f"✓ Déchiffré → next_hop: {next_hop}")
+        print(f" Déchiffré → next_hop: {next_hop}")
         
         if next_hop and next_hop.strip():
             self.transmettre(next_hop, reste)
         else:
-            print("✓ Message final")
+            print(" Message final")
     
     def ecouter(self):
         """Écoute les messages entrants"""
@@ -109,7 +109,7 @@ class Routeur:
         server.bind(("0.0.0.0", self.port))
         server.listen(5)
         
-        print(f"✓ En écoute sur port {self.port}\n")
+        print(f" En écoute sur port {self.port}\n")
         
         while self.running:
             try:
@@ -135,7 +135,7 @@ class Routeur:
         try:
             self.ecouter()
         except KeyboardInterrupt:
-            print("\n✓ Arrêt")
+            print("\n Arrêt")
             self.running = False
 
 if __name__ == "__main__":

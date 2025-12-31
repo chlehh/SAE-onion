@@ -41,7 +41,7 @@ def enregistrer_routeur(nom, ip, port, cle_pub, db_ip):
     
     conn.commit()
     conn.close()
-    print(f"✓ Routeur {nom} enregistré")
+    print(f" Routeur {nom} enregistré")
     return True
 
 def enregistrer_client(nom, ip, port, db_ip):
@@ -62,7 +62,7 @@ def enregistrer_client(nom, ip, port, db_ip):
     
     conn.commit()
     conn.close()
-    print(f"✓ Client {nom} enregistré")
+    print(f" Client {nom} enregistré")
     return True
 
 def recup_routeurs(db_ip):
@@ -160,7 +160,7 @@ def master(db_ip, master_port):
     server.bind(("0.0.0.0", master_port))
     server.listen(5)
     
-    print(f"✓ Master en écoute sur port {master_port}\n")
+    print(f" Master en écoute sur port {master_port}\n")
     
     while True:
         try:
@@ -251,18 +251,18 @@ def monitor_routeurs(db_ip, interval=60):
             # Tester routeurs
             for nom, ip, port in routeurs:
                 if not check_routeur_status(ip, port):
-                    print(f"  ✗ {nom} inactif")
+                    print(f"   {nom} inactif")
                     remove_inactive_routeur(nom, db_ip)
                 else:
-                    print(f"  ✓ {nom} actif")
+                    print(f"   {nom} actif")
             
             # Tester clients
             for nom, ip, port in clients:
                 if not check_client_status(ip, port):
-                    print(f"  ✗ {nom} inactif")
+                    print(f"   {nom} inactif")
                     remove_inactive_client(nom, db_ip)
                 else:
-                    print(f"  ✓ {nom} actif")
+                    print(f"   {nom} actif")
             
             print(f"\nProchaine vérification dans {interval}s...")
             time.sleep(interval)

@@ -22,7 +22,7 @@ class Client:
         self.running = True
         self.signals = ClientSignals()
         
-        print(f"✓ Client {nom} initialisé (port {port})")
+        print(f" Client {nom} initialisé (port {port})")
     
     def enregistrer_aupres_master(self):
         """S'enregistre au Master"""
@@ -103,7 +103,7 @@ class Client:
                             "port": int(elements[2])
                         }
             
-            print(f"✓ Récupéré: {len(self.routeurs_disponibles)} routeurs, {len(self.clients_disponibles)} clients")
+            print(f"Récupéré: {len(self.routeurs_disponibles)} routeurs, {len(self.clients_disponibles)} clients")
             return True
         except:
             return False
@@ -130,7 +130,7 @@ class Client:
                 cle_str = self.routeurs_disponibles[routeur_nom]['cle_publique']
                 
                 if ',' not in cle_str:
-                    print(f"✗ Clé mal formatée pour {routeur_nom}")
+                    print(f" Clé mal formatée pour {routeur_nom}")
                     return None
                 
                 cle_publique = decoder_cle_recue(cle_str)
@@ -152,7 +152,7 @@ class Client:
         """Envoie un message"""
         chemin = self.choisir_chemin(nb_sauts)
         if not chemin:
-            self.signals.message_recu.emit("✗ Pas assez de routeurs")
+            self.signals.message_recu.emit(" Pas assez de routeurs")
             return False
         
         return self._envoyer_avec_chemin(destinataire, message, chemin)
@@ -160,7 +160,7 @@ class Client:
     def envoyer_message_avec_routeurs(self, destinataire, message, routeurs_liste):
         """Envoie avec routeurs spécifiques"""
         if not routeurs_liste:
-            self.signals.message_recu.emit("✗ Aucun routeur")
+            self.signals.message_recu.emit(" Aucun routeur")
             return False
         
         return self._envoyer_avec_chemin(destinataire, message, routeurs_liste)
@@ -171,7 +171,7 @@ class Client:
             # Chiffrer
             message_chiffre = self.chiffrer_message(message, destinataire, chemin)
             if not message_chiffre:
-                self.signals.message_recu.emit("✗ Erreur chiffrement")
+                self.signals.message_recu.emit(" Erreur chiffrement")
                 return False
             
             # Envoyer au premier routeur
@@ -184,7 +184,7 @@ class Client:
             s.close()
             
             chemin_str = " → ".join(chemin)
-            self.signals.message_recu.emit(f"✓ Envoyé à {destinataire} via {chemin_str}")
+            self.signals.message_recu.emit(f" Envoyé à {destinataire} via {chemin_str}")
             return True
         except:
             return False
@@ -196,7 +196,7 @@ class Client:
         server.bind(("0.0.0.0", self.port))
         server.listen(5)
         
-        print(f"✓ En écoute sur port {self.port}")
+        print(f" En écoute sur port {self.port}")
         
         while self.running:
             try:
