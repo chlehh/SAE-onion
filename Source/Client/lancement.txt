@@ -1,2 +1,2 @@
-python client.py <NOM_CLIENT> <PORT_CLIENT> <MASTER_IP> <MASTER_PORT>
+python Client.py <NOM_CLIENT> <PORT_CLIENT> <MASTER_IP> <MASTER_PORT>
 				
