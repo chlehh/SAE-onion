@@ -11,8 +11,8 @@ from interface_client import InterfaceClient
 def main():
     if len(sys.argv) != 5:
         print("Usage incorrect!")
-        print("Usage : python client.py <NOM> <PORT> <MASTER_IP> <MASTER_PORT>")
-        print("Exemple : python client.py ClientA 7001 192.168.1.179 5000")
+        print("Usage : python Client.py <NOM> <PORT> <MASTER_IP> <MASTER_PORT>")
+        print("Exemple : python Client.py ClientA 7001 192.168.1.179 5000")
         sys.exit(1)
     
     nom = sys.argv[1]
