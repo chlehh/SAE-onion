@@ -1,28 +1,24 @@
 #!/usr/bin/env python3
-"""
-interface_master.py
-Interface graphique pour le serveur Master
-"""
+"""Interface graphique pour le serveur Master avec gestion"""
 
 import sys
 import mariadb
+import subprocess
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QPushButton, QTextEdit, 
                              QTableWidget, QTableWidgetItem, QTabWidget, 
-                             QGroupBox, QMessageBox)
-from PyQt6.QtCore import QTimer, pyqtSignal
+                             QGroupBox, QMessageBox, QLineEdit, QComboBox)
+from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QFont
 
 class InterfaceMaster(QMainWindow):
-    signal_connexion = pyqtSignal()
-    
     def __init__(self, db_ip, master_port):
         super().__init__()
         self.db_ip = db_ip
         self.master_port = master_port
         
         self.setWindowTitle(f"Serveur Master - Port {master_port}")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setGeometry(100, 100, 1200, 800)
         
         self.init_ui()
         
@@ -35,14 +31,14 @@ class InterfaceMaster(QMainWindow):
         self.refresh_data()
     
     def init_ui(self):
-        """Initialise l'interface utilisateur."""
+        """Initialise l'interface utilisateur"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
         main_layout = QVBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # En-tete
+        # En-tête
         header_layout = QHBoxLayout()
         
         title_label = QLabel("Serveur Master - Routage en Oignon")
@@ -54,14 +50,13 @@ class InterfaceMaster(QMainWindow):
         
         header_layout.addStretch()
         
-        # Informations de connexion
         info_label = QLabel(f"DB: {self.db_ip} | Port: {self.master_port}")
         info_label.setStyleSheet("color: #666; font-size: 12px;")
         header_layout.addWidget(info_label)
         
         main_layout.addLayout(header_layout)
         
-        # Statistiques rapides
+        # Statistiques
         stats_group = QGroupBox("Statistiques")
         stats_layout = QHBoxLayout()
         
@@ -73,17 +68,13 @@ class InterfaceMaster(QMainWindow):
         self.label_nb_clients.setStyleSheet("font-size: 14px; padding: 10px; background-color: #f3e5f5; border-radius: 5px;")
         stats_layout.addWidget(self.label_nb_clients)
         
-        self.label_nb_logs = QLabel("Logs: 0")
-        self.label_nb_logs.setStyleSheet("font-size: 14px; padding: 10px; background-color: #e8f5e9; border-radius: 5px;")
-        stats_layout.addWidget(self.label_nb_logs)
-        
         stats_group.setLayout(stats_layout)
         main_layout.addWidget(stats_group)
         
         # Onglets
         tabs = QTabWidget()
         
-        # Onglet Routeurs
+        # ========== ONGLET ROUTEURS ==========
         tab_routeurs = QWidget()
         layout_routeurs = QVBoxLayout()
         
@@ -96,7 +87,7 @@ class InterfaceMaster(QMainWindow):
         self.table_routeurs.setColumnWidth(3, 300)
         self.table_routeurs.setColumnWidth(4, 100)
         
-        layout_routeurs.addWidget(QLabel("Routeurs Actifs"))
+        layout_routeurs.addWidget(QLabel("Routeurs Enregistres"))
         layout_routeurs.addWidget(self.table_routeurs)
         
         btn_refresh_routeurs = QPushButton("Rafraichir")
@@ -106,7 +97,7 @@ class InterfaceMaster(QMainWindow):
         tab_routeurs.setLayout(layout_routeurs)
         tabs.addTab(tab_routeurs, "Routeurs")
         
-        # Onglet Clients
+        # ========== ONGLET CLIENTS ==========
         tab_clients = QWidget()
         layout_clients = QVBoxLayout()
         
@@ -128,34 +119,82 @@ class InterfaceMaster(QMainWindow):
         tab_clients.setLayout(layout_clients)
         tabs.addTab(tab_clients, "Clients")
         
-        # Onglet Logs
-        tab_logs = QWidget()
-        layout_logs = QVBoxLayout()
+        # ========== ONGLET GÉRER (3ème position) ==========
+        tab_gerer = QWidget()
+        layout_gerer = QVBoxLayout()
         
-        self.table_logs = QTableWidget()
-        self.table_logs.setColumnCount(4)
-        self.table_logs.setHorizontalHeaderLabels(["ID", "Message ID", "Routeur", "Timestamp"])
-        self.table_logs.setColumnWidth(0, 80)
-        self.table_logs.setColumnWidth(1, 200)
-        self.table_logs.setColumnWidth(2, 150)
-        self.table_logs.setColumnWidth(3, 200)
+        # Section Lancer un Routeur
+        group_routeur = QGroupBox("Lancer un Routeur")
+        layout_form_routeur = QVBoxLayout()
         
-        layout_logs.addWidget(QLabel("Logs des Messages"))
-        layout_logs.addWidget(self.table_logs)
+        # Nom du routeur
+        layout_nom_r = QHBoxLayout()
+        layout_nom_r.addWidget(QLabel("Nom du routeur:"))
+        self.input_nom_routeur = QLineEdit()
+        self.input_nom_routeur.setPlaceholderText("Ex: R1")
+        layout_nom_r.addWidget(self.input_nom_routeur)
+        layout_form_routeur.addLayout(layout_nom_r)
         
-        btn_layout = QHBoxLayout()
-        btn_refresh_logs = QPushButton("Rafraichir")
-        btn_refresh_logs.clicked.connect(self.refresh_data)
-        btn_layout.addWidget(btn_refresh_logs)
+        # Port du routeur
+        layout_port_r = QHBoxLayout()
+        layout_port_r.addWidget(QLabel("Port:"))
+        self.input_port_routeur = QLineEdit()
+        self.input_port_routeur.setPlaceholderText("Ex: 6001")
+        layout_port_r.addWidget(self.input_port_routeur)
+        layout_form_routeur.addLayout(layout_port_r)
         
-        btn_clear_logs = QPushButton("Effacer les logs")
-        btn_clear_logs.clicked.connect(self.clear_logs)
-        btn_layout.addWidget(btn_clear_logs)
+        # Bouton lancer routeur
+        btn_lancer_routeur = QPushButton("Lancer le Routeur")
+        btn_lancer_routeur.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; font-weight: bold;")
+        btn_lancer_routeur.clicked.connect(self.lancer_routeur)
+        layout_form_routeur.addWidget(btn_lancer_routeur)
         
-        layout_logs.addLayout(btn_layout)
+        group_routeur.setLayout(layout_form_routeur)
+        layout_gerer.addWidget(group_routeur)
         
-        tab_logs.setLayout(layout_logs)
-        tabs.addTab(tab_logs, "Logs")
+        # Section Lancer un Client
+        group_client = QGroupBox("Lancer un Client")
+        layout_form_client = QVBoxLayout()
+        
+        # Nom du client
+        layout_nom_c = QHBoxLayout()
+        layout_nom_c.addWidget(QLabel("Nom du client:"))
+        self.input_nom_client = QLineEdit()
+        self.input_nom_client.setPlaceholderText("Ex: ClientA")
+        layout_nom_c.addWidget(self.input_nom_client)
+        layout_form_client.addLayout(layout_nom_c)
+        
+        # Port du client
+        layout_port_c = QHBoxLayout()
+        layout_port_c.addWidget(QLabel("Port:"))
+        self.input_port_client = QLineEdit()
+        self.input_port_client.setPlaceholderText("Ex: 7001")
+        layout_port_c.addWidget(self.input_port_client)
+        layout_form_client.addLayout(layout_port_c)
+        
+        # Bouton lancer client
+        btn_lancer_client = QPushButton("Lancer le Client")
+        btn_lancer_client.setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;")
+        btn_lancer_client.clicked.connect(self.lancer_client)
+        layout_form_client.addWidget(btn_lancer_client)
+        
+        group_client.setLayout(layout_form_client)
+        layout_gerer.addWidget(group_client)
+        
+        # Section Processus lancés
+        group_processus = QGroupBox("Information")
+        layout_processus = QVBoxLayout()
+        
+        info_label = QLabel("Les routeurs et clients se lancent dans des terminaux séparés.\nConsultez les terminaux ouverts pour voir leur statut.")
+        info_label.setStyleSheet("padding: 10px; background-color: #e8f5e9;")
+        layout_processus.addWidget(info_label)
+        
+        group_processus.setLayout(layout_processus)
+        layout_gerer.addWidget(group_processus)
+        
+        layout_gerer.addStretch()
+        tab_gerer.setLayout(layout_gerer)
+        tabs.addTab(tab_gerer, "Gerer")
         
         main_layout.addWidget(tabs)
         
@@ -169,10 +208,9 @@ class InterfaceMaster(QMainWindow):
         main_layout.addWidget(self.status_text)
         
         self.log_status("Interface Master initialisee")
-        self.log_status(f"En attente de connexions sur le port {self.master_port}")
     
     def get_db_connection(self):
-        """Retourne une connexion a la base de donnees."""
+        """Connexion à la DB"""
         try:
             conn = mariadb.connect(
                 host=self.db_ip,
@@ -182,18 +220,77 @@ class InterfaceMaster(QMainWindow):
             )
             return conn
         except mariadb.Error as e:
-            self.log_status(f"Erreur de connexion a la DB : {e}")
+            self.log_status(f"Erreur DB : {e}")
             return None
     
+    def lancer_routeur(self):
+        """Lance un nouveau routeur"""
+        nom = self.input_nom_routeur.text().strip()
+        port = self.input_port_routeur.text().strip()
+        
+        if not nom or not port:
+            QMessageBox.warning(self, "Erreur", "Remplissez tous les champs")
+            return
+        
+        try:
+            # Vérifier que le port est un nombre
+            port_num = int(port)
+        except ValueError:
+            QMessageBox.warning(self, "Erreur", "Le port doit etre un nombre")
+            return
+        
+        # CORRECTION ICI : Utiliser python3 au lieu de python
+        if sys.platform == "win32":
+            # Windows
+            commande = f'start cmd /k python routeur.py {nom} {port} {self.db_ip} {self.master_port}'
+            subprocess.Popen(commande, shell=True)
+        else:
+            # Linux/Mac - CORRECTION : utiliser python3
+            commande = f'python3 routeur.py {nom} {port} {self.db_ip} {self.master_port}'
+            subprocess.Popen(['gnome-terminal', '--', 'bash', '-c', f'{commande}; exec bash'])
+        
+        self.log_status(f"Terminal lance pour routeur {nom} sur port {port}")
+        self.input_nom_routeur.clear()
+        self.input_port_routeur.clear()
+    
+    def lancer_client(self):
+        """Lance un nouveau client"""
+        nom = self.input_nom_client.text().strip()
+        port = self.input_port_client.text().strip()
+        
+        if not nom or not port:
+            QMessageBox.warning(self, "Erreur", "Remplissez tous les champs")
+            return
+        
+        try:
+            # Vérifier que le port est un nombre
+            port_num = int(port)
+        except ValueError:
+            QMessageBox.warning(self, "Erreur", "Le port doit etre un nombre")
+            return
+        
+        # CORRECTION ICI : Utiliser python3 au lieu de python
+        if sys.platform == "win32":
+            # Windows
+            commande = f'start cmd /k python main.py {nom} {port} {self.db_ip} {self.master_port}'
+            subprocess.Popen(commande, shell=True)
+        else:
+            # Linux/Mac - CORRECTION : utiliser python3
+            commande = f'python3 main.py {nom} {port} {self.db_ip} {self.master_port}'
+            subprocess.Popen(['gnome-terminal', '--', 'bash', '-c', f'{commande}; exec bash'])
+        
+        self.log_status(f"Terminal lance pour client {nom} sur port {port}")
+        self.input_nom_client.clear()
+        self.input_port_client.clear()
+    
     def refresh_data(self):
-        """Rafraîchit toutes les données depuis la base de données."""
+        """Rafraîchit toutes les données"""
         self.load_routeurs()
         self.load_clients()
-        self.load_logs()
         self.update_stats()
     
     def load_routeurs(self):
-        """Charge les routeurs depuis la base de donnees."""
+        """Charge les routeurs depuis la DB"""
         conn = self.get_db_connection()
         if not conn:
             return
@@ -212,7 +309,6 @@ class InterfaceMaster(QMainWindow):
                 cle = str(row[3])[:50] + "..." if row[3] and len(str(row[3])) > 50 else str(row[3])
                 self.table_routeurs.setItem(i, 3, QTableWidgetItem(cle))
                 
-                # Bouton supprimer
                 btn_delete = QPushButton("Supprimer")
                 btn_delete.clicked.connect(lambda checked, nom=str(row[0]): self.supprimer_routeur(nom))
                 btn_delete.setStyleSheet("background-color: #dc3545; color: white;")
@@ -220,10 +316,10 @@ class InterfaceMaster(QMainWindow):
             
             conn.close()
         except mariadb.Error as e:
-            self.log_status(f"Erreur lors du chargement des routeurs : {e}")
+            self.log_status(f"Erreur chargement routeurs : {e}")
     
     def load_clients(self):
-        """Charge les clients depuis la base de donnees."""
+        """Charge les clients depuis la DB"""
         conn = self.get_db_connection()
         if not conn:
             return
@@ -240,7 +336,6 @@ class InterfaceMaster(QMainWindow):
                 self.table_clients.setItem(i, 1, QTableWidgetItem(str(row[1])))
                 self.table_clients.setItem(i, 2, QTableWidgetItem(str(row[2])))
                 
-                # Bouton supprimer
                 btn_delete = QPushButton("Supprimer")
                 btn_delete.clicked.connect(lambda checked, nom=str(row[0]): self.supprimer_client(nom))
                 btn_delete.setStyleSheet("background-color: #dc3545; color: white;")
@@ -248,39 +343,14 @@ class InterfaceMaster(QMainWindow):
             
             conn.close()
         except mariadb.Error as e:
-            self.log_status(f"Erreur lors du chargement des clients : {e}")
-    
-    def load_logs(self):
-        """Charge les logs depuis la base de données."""
-        conn = self.get_db_connection()
-        if not conn:
-            return
-        
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT id, message_id, routeur, timestamp FROM logs ORDER BY timestamp DESC LIMIT 100")
-            rows = cur.fetchall()
-            
-            self.table_logs.setRowCount(len(rows))
-            
-            for i, row in enumerate(rows):
-                self.table_logs.setItem(i, 0, QTableWidgetItem(str(row[0])))
-                self.table_logs.setItem(i, 1, QTableWidgetItem(str(row[1])))
-                self.table_logs.setItem(i, 2, QTableWidgetItem(str(row[2])))
-                self.table_logs.setItem(i, 3, QTableWidgetItem(str(row[3])))
-            
-            conn.close()
-        except mariadb.Error as e:
-            self.log_status(f"Erreur lors du chargement des logs : {e}")
+            self.log_status(f"Erreur chargement clients : {e}")
     
     def supprimer_routeur(self, nom):
-        """Supprime un routeur de la base de donnees."""
+        """Supprime un routeur"""
         reply = QMessageBox.question(
-            self,
-            'Confirmation',
-            f"Voulez-vous vraiment supprimer le routeur '{nom}' ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            self, 'Confirmation',
+            f"Supprimer le routeur '{nom}' ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
@@ -297,16 +367,14 @@ class InterfaceMaster(QMainWindow):
                 self.log_status(f"Routeur {nom} supprime")
                 self.refresh_data()
             except mariadb.Error as e:
-                self.log_status(f"Erreur lors de la suppression du routeur : {e}")
+                self.log_status(f"Erreur suppression : {e}")
     
     def supprimer_client(self, nom):
-        """Supprime un client de la base de donnees."""
+        """Supprime un client"""
         reply = QMessageBox.question(
-            self,
-            'Confirmation',
-            f"Voulez-vous vraiment supprimer le client '{nom}' ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            self, 'Confirmation',
+            f"Supprimer le client '{nom}' ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
@@ -323,10 +391,10 @@ class InterfaceMaster(QMainWindow):
                 self.log_status(f"Client {nom} supprime")
                 self.refresh_data()
             except mariadb.Error as e:
-                self.log_status(f"Erreur lors de la suppression du client : {e}")
+                self.log_status(f"Erreur suppression : {e}")
     
     def update_stats(self):
-        """Met à jour les statistiques."""
+        """Met à jour les statistiques"""
         conn = self.get_db_connection()
         if not conn:
             return
@@ -334,53 +402,20 @@ class InterfaceMaster(QMainWindow):
         try:
             cur = conn.cursor()
             
-            # Nombre de routeurs
             cur.execute("SELECT COUNT(*) FROM routeurs WHERE type='routeur'")
             nb_routeurs = cur.fetchone()[0]
             self.label_nb_routeurs.setText(f"Routeurs: {nb_routeurs}")
             
-            # Nombre de clients
             cur.execute("SELECT COUNT(*) FROM clients")
             nb_clients = cur.fetchone()[0]
             self.label_nb_clients.setText(f"Clients: {nb_clients}")
             
-            # Nombre de logs
-            cur.execute("SELECT COUNT(*) FROM logs")
-            nb_logs = cur.fetchone()[0]
-            self.label_nb_logs.setText(f"Logs: {nb_logs}")
-            
             conn.close()
         except mariadb.Error as e:
-            self.log_status(f"Erreur lors de la mise a jour des stats : {e}")
-    
-    def clear_logs(self):
-        """Efface tous les logs de la base de données."""
-        reply = QMessageBox.question(
-            self, 
-            'Confirmation', 
-            "Êtes-vous sûr de vouloir effacer tous les logs ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            conn = self.get_db_connection()
-            if not conn:
-                return
-            
-            try:
-                cur = conn.cursor()
-                cur.execute("DELETE FROM logs")
-                conn.commit()
-                conn.close()
-                
-                self.log_status("Logs effac es avec succes")
-                self.refresh_data()
-            except mariadb.Error as e:
-                self.log_status(f"Erreur lors de l'effacement des logs : {e}")
+            self.log_status(f"Erreur stats : {e}")
     
     def log_status(self, message):
-        """Ajoute un message dans la zone de statut."""
+        """Ajoute un message au statut"""
         from datetime import datetime
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.status_text.append(f"[{timestamp}] {message}")
