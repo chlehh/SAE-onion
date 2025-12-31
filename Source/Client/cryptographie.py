@@ -26,14 +26,14 @@ def generer_cles():
     return (d, n), (e, n)  # (privée, publique)
 
 def chiffrer(message, cle_publique):
-    """Chiffre un message"""
+    """Transforme un message en texte illisible avec la clé publique"""
     e, n = cle_publique
     octets = message.encode("utf-8")
     chiffres = [str(pow(b, e, n)) for b in octets]
     return ",".join(chiffres)
 
 def dechiffrer(message_chiffre, cle_privee):
-    """Déchiffre un message"""
+    """Retransforme le message illisible en texte clair avec la clé privée"""
     d, n = cle_privee
     try:
         nombres = [int(x) for x in message_chiffre.split(",") if x.strip()]
@@ -43,12 +43,12 @@ def dechiffrer(message_chiffre, cle_privee):
         return None
 
 def encoder_cle_pour_envoi(cle_publique):
-    """Encode clé publique en texte: 'e,n'"""
+    """Convertit la clé publique en texte pour l'envoyer (format: "e,n")"""
     e, n = cle_publique
     return f"{e},{n}"
 
 def decoder_cle_recue(cle_str):
-    """Décode clé publique depuis texte"""
+    """Reconvertit le texte reçu en clé publique utilisable"""
     try:
         parties = cle_str.strip().split(",")
         if len(parties) != 2:

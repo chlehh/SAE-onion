@@ -66,7 +66,7 @@ def enregistrer_client(nom, ip, port, db_ip):
     return True
 
 def recup_routeurs(db_ip):
-    """Récupère la liste des routeurs"""
+    """Récupère la liste de tous les routeurs depuis la base de données"""
     conn = get_db_connection(db_ip)
     if not conn:
         return {}
@@ -98,7 +98,7 @@ def recup_clients(db_ip):
     return clients
 
 def handle_client_connection(conn, addr, db_ip):
-    """Gère une connexion entrante"""
+    """Gère une connexion entrante (routeur ou client qui se connecte)"""
     try:
         data = conn.recv(4096).decode()
         print(f"Reçu de {addr}: {data}")
