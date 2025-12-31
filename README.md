@@ -64,7 +64,6 @@ Client B → reçoit le message
 - **Sockets TCP** (communication réseau)
 - **RSA** (chiffrement multicouche)
 
--
 
 ## Documentation
 
@@ -73,5 +72,6 @@ Pour toute aide d'installation ou de configuration, veuillez vous référer aux 
 Vous y retrouverez aussi une **vidéo de démonstration** du fonctionnement du projet avec différentes explications.
 
 Les codes source se situent dans le dossier `Source/` 
+
 
 
