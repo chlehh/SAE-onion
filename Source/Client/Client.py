@@ -22,7 +22,7 @@ class Client:
         self.running = True
         self.signals = ClientSignals()
         
-        print(f" Client {nom} initialisé (port {port})")
+        print(f"Client {nom} initialise (port {port})")
     
     def enregistrer_aupres_master(self):
         """S'enregistre au Master"""
@@ -31,26 +31,26 @@ class Client:
             s.connect((self.master_ip, self.master_port))
             
             message = f"Client {self.nom} {self.port}"
-            s.send(message.encode())
+            s.send(message.encode('utf-8'))
             
-            reponse = s.recv(1024).decode()
+            reponse = s.recv(1024).decode('utf-8', errors='ignore')
             s.close()
             
             if reponse.startswith("OK"):
-                self.signals.status_change.emit("Enregistré")
+                self.signals.status_change.emit("Enregistre")
                 return True
             return False
         except:
             return False
     
     def recuperer_routeurs(self):
-        """Récupère routeurs et clients"""
+        """Recupere routeurs et clients"""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((self.master_ip, self.master_port))
-            s.send("GET_ALL".encode())
+            s.send("GET_ALL".encode('utf-8'))
             
-            reponse = s.recv(8192).decode()
+            reponse = s.recv(8192).decode('utf-8', errors='ignore')
             s.close()
             
             if "ROUTEURS:" not in reponse or "CLIENTS:" not in reponse:
@@ -67,7 +67,6 @@ class Client:
                     if not routeur.strip():
                         continue
                     
-                    # Trouver les 3 premiers ":"
                     idx1 = routeur.find(":")
                     idx2 = routeur.find(":", idx1 + 1)
                     idx3 = routeur.find(":", idx2 + 1)
@@ -103,13 +102,14 @@ class Client:
                             "port": int(elements[2])
                         }
             
-            print(f"Récupéré: {len(self.routeurs_disponibles)} routeurs, {len(self.clients_disponibles)} clients")
+            print(f"Recupere: {len(self.routeurs_disponibles)} routeurs, {len(self.clients_disponibles)} clients")
             return True
-        except:
+        except Exception as e:
+            print(f"Erreur recuperation: {e}")
             return False
     
     def choisir_chemin(self, nb_sauts):
-        """Choisit un chemin aléatoire"""
+        """Choisit un chemin aleatoire"""
         if len(self.routeurs_disponibles) < nb_sauts:
             return None
         
@@ -121,87 +121,83 @@ class Client:
         try:
             from cryptographie import chiffrer, decoder_cle_recue
             
-            # Contenu initial
             contenu = f"{destinataire}:{self.nom}:{message}"
             
-            # Chiffrer couche par couche (de la fin au début)
             for i in range(len(chemin) - 1, -1, -1):
                 routeur_nom = chemin[i]
                 cle_str = self.routeurs_disponibles[routeur_nom]['cle_publique']
                 
                 if ',' not in cle_str:
-                    print(f" Clé mal formatée pour {routeur_nom}")
+                    print(f"Cle mal formatee pour {routeur_nom}")
                     return None
                 
                 cle_publique = decoder_cle_recue(cle_str)
                 if not cle_publique:
                     return None
                 
-                # Next hop
                 next_hop = destinataire if i == len(chemin) - 1 else chemin[i + 1]
                 
-                # Chiffrer avec RSA
                 contenu_chiffre = chiffrer(contenu, cle_publique)
                 contenu = f"{next_hop}|{contenu_chiffre}"
             
             return contenu
-        except:
+        except Exception as e:
+            print(f"Erreur chiffrement: {e}")
             return None
     
     def envoyer_message(self, destinataire, message, nb_sauts):
         """Envoie un message"""
         chemin = self.choisir_chemin(nb_sauts)
         if not chemin:
-            self.signals.message_recu.emit(" Pas assez de routeurs")
+            self.signals.message_recu.emit("Pas assez de routeurs")
             return False
         
         return self._envoyer_avec_chemin(destinataire, message, chemin)
     
     def envoyer_message_avec_routeurs(self, destinataire, message, routeurs_liste):
-        """Envoie avec routeurs spécifiques"""
+        """Envoie avec routeurs specifiques"""
         if not routeurs_liste:
-            self.signals.message_recu.emit(" Aucun routeur")
+            self.signals.message_recu.emit("Aucun routeur")
             return False
         
         return self._envoyer_avec_chemin(destinataire, message, routeurs_liste)
     
     def _envoyer_avec_chemin(self, destinataire, message, chemin):
-        """Envoie via un chemin donné"""
+        """Envoie via un chemin donne"""
         try:
-            # Chiffrer
             message_chiffre = self.chiffrer_message(message, destinataire, chemin)
             if not message_chiffre:
-                self.signals.message_recu.emit(" Erreur chiffrement")
+                self.signals.message_recu.emit("Erreur chiffrement")
                 return False
             
-            # Envoyer au premier routeur
             premier = chemin[0]
             info = self.routeurs_disponibles[premier]
             
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((info['ip'], info['port']))
-            s.send(message_chiffre.encode())
+            s.send(message_chiffre.encode('utf-8'))
             s.close()
             
-            chemin_str = " → ".join(chemin)
-            self.signals.message_recu.emit(f" Envoyé à {destinataire} via {chemin_str}")
+            chemin_str = " -> ".join(chemin)
+            self.signals.message_recu.emit(f"Envoye a {destinataire} via {chemin_str}")
             return True
-        except:
+        except Exception as e:
+            print(f"Erreur envoi: {e}")
             return False
     
     def ecouter(self):
-        """Écoute les messages entrants"""
+        """Ecoute les messages entrants"""
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind(("0.0.0.0", self.port))
         server.listen(5)
         
-        print(f" En écoute sur port {self.port}")
+        print(f"En ecoute sur port {self.port}")
         
         while self.running:
             try:
                 conn, addr = server.accept()
-                message = conn.recv(8192).decode()
+                message = conn.recv(8192).decode('utf-8', errors='ignore')
                 conn.close()
                 
                 if message and ":" in message:
@@ -210,11 +206,12 @@ class Client:
                         expediteur = parts[1]
                         contenu = parts[2]
                         self.signals.message_recu.emit(f"De {expediteur}: {contenu}")
-            except:
+            except Exception as e:
+                print(f"Erreur reception: {e}")
                 continue
     
     def demarrer(self):
-        """Démarre le client"""
+        """Demarre le client"""
         if not self.enregistrer_aupres_master():
             return False
         
@@ -224,5 +221,5 @@ class Client:
         return True
     
     def arreter(self):
-        """Arrête le client"""
+        """Arrete le client"""
         self.running = False
