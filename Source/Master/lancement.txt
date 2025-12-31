@@ -1,1 +1,1 @@
-python main.py <MASTER_IP> <MASTER_PORT>
+python main.py <BDD_IP> <MASTER_PORT>

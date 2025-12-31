@@ -284,7 +284,7 @@ def handle_client_connection(conn, addr, db_ip):
         elif data == "GET_ROUTEURS":
             routeurs = recup_routeurs(db_ip)
             
-            # ✅ Séparateur ; entre routeurs
+           
             routeurs_str = ";".join([
                 f"{nom}:{info['ip']}:{info['port']}:{info['cle_publique']}"
                 for nom, info in routeurs.items()
@@ -297,7 +297,7 @@ def handle_client_connection(conn, addr, db_ip):
         elif data == "GET_CLIENTS":
             clients = recup_clients(db_ip)
             
-            # ✅ Séparateur ; entre clients
+           
             clients_str = ";".join([
                 f"{nom}:{info['ip']}:{info['port']}"
                 for nom, info in clients.items()
@@ -311,7 +311,7 @@ def handle_client_connection(conn, addr, db_ip):
             routeurs = recup_routeurs(db_ip)
             clients = recup_clients(db_ip)
             
-            # ✅ CORRECTION CRITIQUE : ; pour routeurs ET clients
+            
             routeurs_str = ";".join([
                 f"{nom}:{info['ip']}:{info['port']}:{info['cle_publique']}"
                 for nom, info in routeurs.items()

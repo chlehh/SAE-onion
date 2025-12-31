@@ -43,7 +43,7 @@ def run_master_gui(db_ip, master_port):
     print(" Serveur master démarré\n")
     
     # Démarrer la surveillance des routeurs dans un thread séparé
-    print("🔍 Démarrage de la surveillance des routeurs...")
+    print(" Démarrage de la surveillance des routeurs...")
     monitor_thread = threading.Thread(
         target=monitor_routeurs, 
         args=(db_ip, 60), 
